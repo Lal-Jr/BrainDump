@@ -8,68 +8,79 @@ export default function PostCard({ post, onPublish, onDelete }) {
   });
 
   return (
-    <div className="card p-5 hover:border-slate-700 transition-colors group">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <Link to={`/preview/${post.id}`} className="block">
-            <h3 className="font-semibold text-slate-100 group-hover:text-brand-400 transition-colors truncate">
-              {post.title}
-            </h3>
-          </Link>
-          {post.summary && (
-            <p className="text-sm text-slate-400 mt-1 line-clamp-2">{post.summary}</p>
-          )}
-          <div className="flex items-center gap-3 mt-3">
-            <span className="text-xs text-slate-500">{date}</span>
-            {post.tags?.map(tag => (
-              <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Status & actions */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            post.published
-              ? 'bg-emerald-600/20 text-emerald-400'
-              : 'bg-amber-600/20 text-amber-400'
-          }`}>
-            {post.published ? 'Live' : 'Draft'}
-          </span>
-
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Link
-              to={`/edit/${post.id}`}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
-              title="Edit"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
+    <div className="card-glow group p-0 overflow-hidden animate-fade-in-up">
+      <div className="p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <Link to={`/preview/${post.id}`} className="block">
+              <h3 className="font-semibold text-zinc-100 group-hover:text-brand-400 transition-colors duration-300 truncate text-[15px]">
+                {post.title}
+              </h3>
             </Link>
-            <button
-              onClick={() => onPublish(post.id)}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-emerald-400 transition-colors"
-              title={post.published ? 'Unpublish' : 'Publish'}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => onDelete(post.id)}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors"
-              title="Delete"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
+            {post.summary && (
+              <p className="text-sm text-zinc-500 mt-1.5 line-clamp-2 leading-relaxed">{post.summary}</p>
+            )}
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
+              <span className="text-xs text-zinc-600 font-medium">{date}</span>
+              {post.tags?.map(tag => (
+                <span key={tag} className="badge-tag text-[11px]">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Status & actions */}
+          <div className="flex flex-col items-end gap-2.5 shrink-0">
+            <span className={post.published ? 'badge-live' : 'badge-draft'}>
+              {post.published ? 'Live' : 'Draft'}
+            </span>
+
+            <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300">
+              <ActionButton
+                to={`/edit/${post.id}`}
+                title="Edit"
+                icon={<path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />}
+              />
+              <button
+                onClick={() => onPublish(post.id)}
+                className="p-2 rounded-lg text-zinc-600 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all duration-200"
+                title={post.published ? 'Unpublish' : 'Publish'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+              </button>
+              <button
+                onClick={() => onDelete(post.id)}
+                className="p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-all duration-200"
+                title="Delete"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Bottom shimmer line on hover */}
+      <div className="h-px bg-gradient-to-r from-transparent via-brand-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
     </div>
+  );
+}
+
+function ActionButton({ to, title, icon }) {
+  return (
+    <Link
+      to={to}
+      className="p-2 rounded-lg text-zinc-600 hover:text-zinc-200 hover:bg-white/[0.06] transition-all duration-200"
+      title={title}
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        {icon}
+      </svg>
+    </Link>
   );
 }
