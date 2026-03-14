@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen;
+  }
+
+  ::selection {
+    @apply bg-brand-600/40;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-5 py-2.5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800
+      text-white font-medium rounded-xl transition-all duration-150
+      shadow-lg shadow-brand-600/20 hover:shadow-brand-600/30
+      active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-5 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600
+      text-slate-200 font-medium rounded-xl transition-all duration-150
+      border border-slate-700 active:scale-[0.98]
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-5 py-2.5 bg-red-600/10 hover:bg-red-600/20 active:bg-red-600/30
+      text-red-400 font-medium rounded-xl transition-all duration-150
+      border border-red-600/30 active:scale-[0.98];
+  }
+
+  .btn-success {
+    @apply px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800
+      text-white font-medium rounded-xl transition-all duration-150
+      shadow-lg shadow-emerald-600/20 active:scale-[0.98];
+  }
+
+  .card {
+    @apply bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-2xl;
+  }
+
+  .prose-custom h2 {
+    @apply text-xl font-bold text-slate-100 mt-8 mb-3;
+  }
+  .prose-custom h3 {
+    @apply text-lg font-semibold text-slate-200 mt-6 mb-2;
+  }
+  .prose-custom p {
+    @apply text-slate-300 leading-relaxed mb-4;
+  }
+  .prose-custom ul, .prose-custom ol {
+    @apply text-slate-300 mb-4 pl-6;
+  }
+  .prose-custom li {
+    @apply mb-1;
+  }
+  .prose-custom ul {
+    @apply list-disc;
+  }
+  .prose-custom ol {
+    @apply list-decimal;
+  }
+  .prose-custom blockquote {
+    @apply border-l-4 border-brand-500 pl-4 py-1 my-4 bg-brand-600/5 rounded-r-lg text-slate-300 italic;
+  }
+  .prose-custom code {
+    @apply bg-slate-800 text-brand-300 px-1.5 py-0.5 rounded text-sm font-mono;
+  }
+  .prose-custom pre {
+    @apply bg-slate-800 border border-slate-700 rounded-xl p-4 overflow-x-auto mb-4;
+  }
+  .prose-custom pre code {
+    @apply bg-transparent p-0;
+  }
+  .prose-custom img {
+    @apply rounded-xl my-6 w-full;
+  }
+  .prose-custom a {
+    @apply text-brand-400 hover:text-brand-300 underline underline-offset-2;
+  }
+  .prose-custom hr {
+    @apply border-slate-800 my-8;
+  }
+  .prose-custom strong {
+    @apply text-slate-100 font-semibold;
+  }
+}
+
+/* Voice recording pulse animation */
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.recording-pulse {
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Loading spinner */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 2s linear infinite;
+}
