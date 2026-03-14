@@ -33,7 +33,7 @@ export default function Create() {
       }
 
       clearInterval(interval);
-      navigate(`/edit/${result.post.id}`);
+      navigate(`/admin/edit/${result.post.id}`);
     } catch (e) {
       console.error(e);
       alert('Generation failed: ' + e.message);

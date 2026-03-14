@@ -28,7 +28,7 @@ export default function Edit() {
       setRawMarkdown(raw);
     } catch (e) {
       alert('Failed to load post: ' + e.message);
-      navigate('/');
+      navigate('/admin');
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function Edit() {
     if (!confirm('Delete this post permanently?')) return;
     try {
       await deletePost(id);
-      navigate('/');
+      navigate('/admin');
     } catch (e) {
       alert('Delete failed: ' + e.message);
     }
@@ -104,7 +104,7 @@ export default function Edit() {
 
       {/* Back + Title */}
       <div className="flex items-center gap-3">
-        <Link to="/" className="p-2 -ml-2 rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all">
+        <Link to="/admin" className="p-2 -ml-2 rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
@@ -143,7 +143,7 @@ export default function Edit() {
         <div className="flex items-center gap-2">
           {post.published && post.slug && (
             <a
-              href={`/blog/${post.slug}`}
+              href={`/${post.slug}`}
               target="_blank"
               rel="noopener"
               className="btn-ghost text-sm flex items-center gap-1.5 text-zinc-500 hover:text-brand-400"

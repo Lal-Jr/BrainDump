@@ -13,37 +13,44 @@ import {
   getRawMarkdown,
   saveRawMarkdown,
 } from '../services/markdown.js';
+import { requireAuth } from '../middleware/auth.js';
+import { recordView } from '../services/analytics.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-// GET /api/posts — list all posts
+// GET /api/posts — list all posts (published=true is public, all posts requires auth)
 router.get('/', async (req, res) => {
   try {
     const posts = await getAllPosts();
-    // If ?published=true, filter to only published
+    // Public: only published posts
     if (req.query.published === 'true') {
       return res.json(posts.filter(p => p.published));
     }
-    res.json(posts);
+    // All posts requires auth
+    requireAuth(req, res, () => {
+      res.json(posts);
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/posts/:slug — get single post by slug
+// GET /api/posts/:slug — get single post by slug (public, tracks views)
 router.get('/view/:slug', async (req, res) => {
   try {
     const post = await getPostBySlug(req.params.slug);
     if (!post) return res.status(404).json({ error: 'Post not found' });
+    // Track view asynchronously
+    recordView(post.id).catch(() => {});
     res.json(post);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/posts/:id — get single post by id
-router.get('/:id', async (req, res) => {
+// GET /api/posts/:id — get single post by id (admin only)
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const post = await getPostById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
@@ -53,8 +60,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/posts/:id/raw — get raw markdown
-router.get('/:id/raw', async (req, res) => {
+// GET /api/posts/:id/raw — get raw markdown (admin only)
+router.get('/:id/raw', requireAuth, async (req, res) => {
   try {
     const raw = await getRawMarkdown(req.params.id);
     res.json({ raw });
@@ -63,8 +70,8 @@ router.get('/:id/raw', async (req, res) => {
   }
 });
 
-// POST /api/posts/from-voice — create post from voice recording
-router.post('/from-voice', upload.single('audio'), async (req, res) => {
+// POST /api/posts/from-voice — create post from voice recording (admin only)
+router.post('/from-voice', requireAuth, upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
 
@@ -106,8 +113,8 @@ router.post('/from-voice', upload.single('audio'), async (req, res) => {
   }
 });
 
-// POST /api/posts/from-text — create post from text input
-router.post('/from-text', async (req, res) => {
+// POST /api/posts/from-text — create post from text input (admin only)
+router.post('/from-text', requireAuth, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'No text provided' });
@@ -133,8 +140,8 @@ router.post('/from-text', async (req, res) => {
   }
 });
 
-// PUT /api/posts/:id — update post
-router.put('/:id', async (req, res) => {
+// PUT /api/posts/:id — update post (admin only)
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const updated = await updatePost(req.params.id, req.body);
     res.json(updated);
@@ -143,8 +150,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/posts/:id/raw — save raw markdown
-router.put('/:id/raw', async (req, res) => {
+// PUT /api/posts/:id/raw — save raw markdown (admin only)
+router.put('/:id/raw', requireAuth, async (req, res) => {
   try {
     const updated = await saveRawMarkdown(req.params.id, req.body.raw);
     res.json(updated);
@@ -153,8 +160,8 @@ router.put('/:id/raw', async (req, res) => {
   }
 });
 
-// POST /api/posts/:id/publish — toggle publish
-router.post('/:id/publish', async (req, res) => {
+// POST /api/posts/:id/publish — toggle publish (admin only)
+router.post('/:id/publish', requireAuth, async (req, res) => {
   try {
     const updated = await togglePublish(req.params.id);
     res.json(updated);
@@ -163,8 +170,8 @@ router.post('/:id/publish', async (req, res) => {
   }
 });
 
-// DELETE /api/posts/:id — delete post
-router.delete('/:id', async (req, res) => {
+// DELETE /api/posts/:id — delete post (admin only)
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     await deletePost(req.params.id);
     res.json({ success: true });

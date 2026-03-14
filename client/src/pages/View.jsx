@@ -3,6 +3,7 @@ import { useParams, useLocation, Link } from 'react-router-dom';
 import { fetchPost, fetchPostBySlug } from '../api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import LoadingSpinner from '../components/LoadingSpinner';
+import Comments from '../components/Comments';
 
 export default function View() {
   const { id, slug } = useParams();
@@ -11,7 +12,7 @@ export default function View() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const isPublicView = location.pathname.startsWith('/blog/');
+  const isPublicView = !location.pathname.startsWith('/admin');
 
   useEffect(() => {
     loadPost();
@@ -40,7 +41,7 @@ export default function View() {
           </svg>
         </div>
         <p className="text-zinc-500 font-medium">{error || 'Post not found'}</p>
-        <Link to={isPublicView ? '/blog' : '/'} className="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 text-sm mt-4 transition-colors">
+        <Link to={isPublicView ? '/' : '/admin'} className="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 text-sm mt-4 transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
@@ -69,7 +70,7 @@ export default function View() {
       <article className={`relative max-w-3xl mx-auto animate-fade-in ${isPublicView ? 'px-5 py-16' : ''}`}>
         {/* Back link */}
         <Link
-          to={isPublicView ? '/blog' : '/'}
+          to={isPublicView ? '/' : '/admin'}
           className="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-zinc-300 transition-colors mb-10"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -111,10 +112,15 @@ export default function View() {
         {/* Content */}
         <MarkdownRenderer content={post.content} />
 
+        {/* Comments section (only on published/public posts) */}
+        {(isPublicView || post.published) && (
+          <Comments postId={post.id} isAdmin={!isPublicView} />
+        )}
+
         {/* Edit link (only for admin preview) */}
         {!isPublicView && (
           <div className="mt-16 pt-8 border-t border-zinc-800/50">
-            <Link to={`/edit/${post.id}`} className="btn-secondary text-sm inline-flex items-center gap-2">
+            <Link to={`/admin/edit/${post.id}`} className="btn-secondary text-sm inline-flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
               </svg>

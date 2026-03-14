@@ -64,7 +64,7 @@ export default function PublicFeed() {
                   className="group animate-fade-in-up"
                   style={{ animationDelay: `${i * 80}ms` }}
                 >
-                  <Link to={`/blog/${post.slug}`} className="block py-8 -mx-4 px-4 rounded-2xl hover:bg-white/[0.02] transition-all duration-300">
+                  <Link to={`/${post.slug}`} className="block py-8 -mx-4 px-4 rounded-2xl hover:bg-white/[0.02] transition-all duration-300">
                     <div className="flex items-start gap-6">
                       {/* Date column */}
                       <div className="hidden sm:block w-24 shrink-0 pt-1">

@@ -6,16 +6,18 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: 'Brain Dump Blog',
+        name: 'Brain Dump Admin',
         short_name: 'BrainDump',
-        description: 'Personal brain dump blog — voice to post',
+        description: 'Personal brain dump blog — admin dashboard',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/admin',
+        scope: '/admin',
         icons: [
           { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
           { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml' },
@@ -24,6 +26,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        navigateFallback: '/index.html',
       },
     }),
   ],

@@ -7,8 +7,9 @@ import { v4 as uuidv4 } from 'uuid';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const POSTS_DIR = path.join(__dirname, '..', 'posts');
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const POSTS_DIR = path.join(DATA_DIR, 'posts');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 
 // Ensure directories exist
 async function ensureDirs() {

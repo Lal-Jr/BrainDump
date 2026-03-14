@@ -22,6 +22,8 @@ Thumbs.db
 # Server generated
 server/posts/
 server/uploads/
+server/analytics/
+server/comments/
 
 # Logs
 *.log
