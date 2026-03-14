@@ -1,23 +1,23 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../context/ToastContext';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError('');
     setLoading(true);
     try {
       await login(password);
       navigate('/admin');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -58,15 +58,6 @@ export default function Login() {
               </svg>
             </div>
           </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 animate-fade-in">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-              </svg>
-              {error}
-            </div>
-          )}
 
           <button
             type="submit"

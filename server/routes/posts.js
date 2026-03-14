@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { transcribeAudio, generateBlogPost, generateImage } from '../services/ai.js';
+import { transcribeAudio, generateFromVoice, generateFromText, generateImage } from '../services/ai.js';
 import {
   createPost,
   getAllPosts,
@@ -18,6 +18,15 @@ import { recordView } from '../services/analytics.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// Helper: detect OpenAI quota/billing errors
+function isQuotaError(e) {
+  const msg = (e?.message || '') + (e?.error?.code || '') + (e?.code || '') + (e?.type || '');
+  return msg.includes('insufficient_quota') || msg.includes('billing') || msg.includes('exceeded your current quota');
+}
+function quotaMsg() {
+  return 'OpenAI API credits exhausted. Add credits at platform.openai.com/settings/organization/billing';
+}
 
 // GET /api/posts — list all posts (published=true is public, all posts requires auth)
 router.get('/', async (req, res) => {
@@ -76,26 +85,44 @@ router.post('/from-voice', requireAuth, upload.single('audio'), async (req, res)
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
 
     // 1. Transcribe audio
-    const transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+    let transcript;
+    try {
+      transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+    } catch (e) {
+      console.error('Transcription failed:', e);
+      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+      return res.status(502).json({ error: 'Transcription failed — could not process audio. Try again or check your recording.', stage: 'transcription' });
+    }
 
-    // 2. Generate blog post from transcript
-    const blogData = await generateBlogPost(transcript);
+    if (!transcript || !transcript.trim()) {
+      return res.status(400).json({ error: 'No speech detected in recording. Try speaking louder or recording in a quieter environment.', stage: 'transcription' });
+    }
 
-    // 3. Generate images (optional, can be slow)
+    // 2. Generate blog post from transcript (voice-specific prompt)
+    let blogData;
+    try {
+      blogData = await generateFromVoice(transcript);
+    } catch (e) {
+      console.error('Voice post generation failed:', e);
+      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+      return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
+    }
+
+    // 3. Generate image only if AI explicitly says the content needs one (rare)
     let content = blogData.content;
-    if (blogData.imagePrompts && blogData.imagePrompts.length > 0) {
-      // Generate first image only to keep it fast
-      const imageUrl = await generateImage(blogData.imagePrompts[0]);
-      if (imageUrl) {
-        // Download and save the image
-        const response = await fetch(imageUrl);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const localUrl = await saveImage(buffer, 'generated.png');
-        content = content.replace(/!\[([^\]]*)\]\(PLACEHOLDER_IMAGE\)/, `![$1](${localUrl})`);
+    if (blogData.needsImage && blogData.imagePrompt) {
+      try {
+        const imageUrl = await generateImage(blogData.imagePrompt);
+        if (imageUrl) {
+          const response = await fetch(imageUrl);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const localUrl = await saveImage(buffer, 'generated.png');
+          content = `![Cover](${localUrl})\n\n${content}`;
+        }
+      } catch (e) {
+        console.warn('Image generation failed (non-critical):', e.message);
       }
     }
-    // Remove remaining placeholders
-    content = content.replace(/!\[([^\]]*)\]\(PLACEHOLDER_IMAGE\)/g, '');
 
     // 4. Save as markdown
     const post = await createPost({
@@ -109,21 +136,42 @@ router.post('/from-voice', requireAuth, upload.single('audio'), async (req, res)
     res.json({ post, transcript });
   } catch (e) {
     console.error('Voice post creation failed:', e);
-    res.status(500).json({ error: e.message });
+    if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
   }
 });
 
 // POST /api/posts/from-text — create post from text input (admin only)
 router.post('/from-text', requireAuth, async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, style, tone } = req.body;
     if (!text) return res.status(400).json({ error: 'No text provided' });
+    if (text.trim().length < 10) return res.status(400).json({ error: 'Please write at least a few words to generate a post from.' });
 
-    const blogData = await generateBlogPost(text);
+    let blogData;
+    try {
+      blogData = await generateFromText(text, { style, tone });
+    } catch (e) {
+      console.error('Text post generation failed:', e);
+      return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
+    }
 
     let content = blogData.content;
-    // Remove placeholders for text-based (skip image gen for speed)
-    content = content.replace(/!\[([^\]]*)\]\(PLACEHOLDER_IMAGE\)/g, '');
+
+    // Generate image only if AI explicitly says the content needs one (rare)
+    if (blogData.needsImage && blogData.imagePrompt) {
+      try {
+        const imageUrl = await generateImage(blogData.imagePrompt);
+        if (imageUrl) {
+          const response = await fetch(imageUrl);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const localUrl = await saveImage(buffer, 'generated.png');
+          content = `![Cover](${localUrl})\n\n${content}`;
+        }
+      } catch (e) {
+        console.warn('Image generation failed (non-critical):', e.message);
+      }
+    }
 
     const post = await createPost({
       title: blogData.title,
@@ -136,7 +184,8 @@ router.post('/from-text', requireAuth, async (req, res) => {
     res.json({ post });
   } catch (e) {
     console.error('Text post creation failed:', e);
-    res.status(500).json({ error: e.message });
+    if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
   }
 });
 

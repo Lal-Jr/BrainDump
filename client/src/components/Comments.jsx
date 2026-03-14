@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchComments, addComment, removeComment } from '../api';
+import { useToast } from '../context/ToastContext';
 
 export default function Comments({ postId, isAdmin }) {
   const [comments, setComments] = useState([]);
@@ -7,7 +8,7 @@ export default function Comments({ postId, isAdmin }) {
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     loadComments();
@@ -28,14 +29,13 @@ export default function Comments({ postId, isAdmin }) {
     e.preventDefault();
     if (!text.trim()) return;
     setSubmitting(true);
-    setError('');
     try {
       const comment = await addComment(postId, { name, text });
       setComments(prev => [...prev, comment]);
       setName('');
       setText('');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -109,10 +109,6 @@ export default function Comments({ postId, isAdmin }) {
               />
             </div>
           </div>
-
-          {error && (
-            <p className="text-sm text-red-400 pl-12">{error}</p>
-          )}
 
           <div className="flex justify-end">
             <button

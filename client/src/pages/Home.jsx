@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchPosts, togglePublish, deletePost, fetchAnalytics } from '../api';
 import PostCard from '../components/PostCard';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useToast } from '../context/ToastContext';
 
 export default function Home() {
   const [posts, setPosts] = useState([]);
@@ -10,6 +11,7 @@ export default function Home() {
   const [filter, setFilter] = useState('all'); // all | draft | published
   const [analytics, setAnalytics] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // overview | posts | comments
+  const toast = useToast();
 
   useEffect(() => {
     loadData();
@@ -36,7 +38,7 @@ export default function Home() {
       await togglePublish(id);
       await loadData();
     } catch (e) {
-      alert('Failed to toggle publish: ' + e.message);
+      toast.error('Failed to toggle publish: ' + e.message);
     }
   }
 
@@ -46,7 +48,7 @@ export default function Home() {
       await deletePost(id);
       await loadData();
     } catch (e) {
-      alert('Failed to delete: ' + e.message);
+      toast.error('Failed to delete: ' + e.message);
     }
   }
 

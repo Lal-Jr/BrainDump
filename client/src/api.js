@@ -8,8 +8,14 @@ function getAuthHeaders() {
 }
 
 async function handleRes(res) {
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  let data;
+  try {
+    const text = await res.text();
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(res.ok ? 'Invalid response from server' : `Request failed (${res.status})`);
+  }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
@@ -44,11 +50,11 @@ export async function createPostFromVoice(audioBlob) {
   }));
 }
 
-export async function createPostFromText(text) {
+export async function createPostFromText(text, { style, tone } = {}) {
   return handleRes(await fetch(`${API}/from-text`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, style, tone }),
   }));
 }
 

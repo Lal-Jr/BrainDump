@@ -4,6 +4,7 @@ import { fetchPost, updatePost, togglePublish, deletePost, fetchRawMarkdown, sav
 import PostEditor from '../components/PostEditor';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useToast } from '../context/ToastContext';
 
 export default function Edit() {
   const { id } = useParams();
@@ -13,7 +14,7 @@ export default function Edit() {
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState('edit'); // edit | raw | preview
   const [rawMarkdown, setRawMarkdown] = useState('');
-  const [toast, setToast] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     loadPost();
@@ -27,26 +28,23 @@ export default function Edit() {
       const raw = await fetchRawMarkdown(id);
       setRawMarkdown(raw);
     } catch (e) {
-      alert('Failed to load post: ' + e.message);
+      toast.error('Failed to load post: ' + e.message);
       navigate('/admin');
     } finally {
       setLoading(false);
     }
   }
 
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 2500);
-  }
+
 
   async function handleSave({ title, content, tags }) {
     try {
       setSaving(true);
       const updated = await updatePost(id, { title, content, tags });
       setPost(updated);
-      showToast('Changes saved');
+      toast.success('Changes saved');
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -57,9 +55,9 @@ export default function Edit() {
       setSaving(true);
       const updated = await saveRawMarkdown(id, rawMarkdown);
       setPost(updated);
-      showToast('Raw markdown saved');
+      toast.success('Raw markdown saved');
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -69,9 +67,9 @@ export default function Edit() {
     try {
       const updated = await togglePublish(id);
       setPost(updated);
-      showToast(updated.published ? 'Published!' : 'Unpublished');
+      toast.success(updated.published ? 'Published!' : 'Unpublished');
     } catch (e) {
-      alert('Publish failed: ' + e.message);
+      toast.error('Publish failed: ' + e.message);
     }
   }
 
@@ -81,7 +79,7 @@ export default function Edit() {
       await deletePost(id);
       navigate('/admin');
     } catch (e) {
-      alert('Delete failed: ' + e.message);
+      toast.error('Delete failed: ' + e.message);
     }
   }
 
@@ -90,18 +88,6 @@ export default function Edit() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Toast notification */}
-      {toast && (
-        <div className="fixed top-6 right-6 z-[100] toast-enter">
-          <div className="flex items-center gap-2.5 bg-surface-300 border border-zinc-800/60 text-zinc-100 px-4 py-2.5 rounded-xl text-sm font-medium shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {toast}
-          </div>
-        </div>
-      )}
-
       {/* Back + Title */}
       <div className="flex items-center gap-3">
         <Link to="/admin" className="p-2 -ml-2 rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all">
