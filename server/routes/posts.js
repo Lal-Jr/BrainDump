@@ -141,6 +141,52 @@ router.post('/from-voice', requireAuth, upload.single('audio'), async (req, res)
   }
 });
 
+// POST /api/posts/from-voice-manual — transcribe audio and save as manual post (admin only)
+router.post('/from-voice-manual', requireAuth, upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
+
+    // Transcribe audio
+    let transcript;
+    try {
+      transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+    } catch (e) {
+      console.error('Transcription failed:', e);
+      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+      return res.status(502).json({ error: 'Transcription failed — could not process audio. Try again or check your recording.', stage: 'transcription' });
+    }
+
+    if (!transcript || !transcript.trim()) {
+      return res.status(400).json({ error: 'No speech detected in recording. Try speaking louder or recording in a quieter environment.', stage: 'transcription' });
+    }
+
+    const title = (req.body.title || '').trim();
+    const summary = (req.body.summary || '').trim();
+    let tags = [];
+    if (req.body.tags) {
+      try { tags = JSON.parse(req.body.tags); } catch (_) {
+        // fallback: comma-separated string
+        tags = String(req.body.tags).split(',').map(t => t.trim()).filter(Boolean);
+      }
+    }
+
+    if (!title) return res.status(400).json({ error: 'Title is required for manual voice posts.' });
+
+    const post = await createPost({
+      title,
+      summary,
+      content: transcript,
+      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+      published: false,
+    });
+
+    res.json({ post, transcript });
+  } catch (e) {
+    console.error('Manual voice post creation failed:', e);
+    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
+  }
+});
+
 // POST /api/posts/from-text — create post from text input (admin only)
 router.post('/from-text', requireAuth, async (req, res) => {
   try {

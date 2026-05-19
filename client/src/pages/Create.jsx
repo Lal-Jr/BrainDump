@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceRecorder from '../components/VoiceRecorder';
-import { createPostFromVoice, createPostFromText, createPostManually } from '../api';
+import { createPostFromVoice, createPostFromText, createPostManually, createPostFromVoiceManual } from '../api';
 import { useToast } from '../context/ToastContext';
 
 const VOICE_STEPS = [
@@ -72,21 +72,27 @@ export default function Create() {
           result = await createPostFromText(textInput, { style, tone });
         }
       } else {
+        // Classic/manual mode — supports both text and voice
         if (mode === 'voice') {
-          clearInterval(interval);
-          setProcessing(false);
-          return toast.error('Classic mode only supports typed posts. Switch to Text or enable AI.');
+          if (!audioBlob) { clearInterval(interval); setProcessing(false); return toast.error('Record something first!'); }
+          if (!manualTitle.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Add a title for your post.'); }
+
+          result = await createPostFromVoiceManual(audioBlob, {
+            title: manualTitle,
+            summary: manualSummary,
+            tags: manualTags.split(',').map(tag => tag.trim()).filter(Boolean),
+          });
+        } else {
+          if (!manualTitle.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Add a title for your post.'); }
+          if (!textInput.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Write the post content first.'); }
+
+          result = await createPostManually({
+            title: manualTitle,
+            summary: manualSummary,
+            content: textInput,
+            tags: manualTags.split(',').map(tag => tag.trim()).filter(Boolean),
+          });
         }
-
-        if (!manualTitle.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Add a title for your post.'); }
-        if (!textInput.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Write the post content first.'); }
-
-        result = await createPostManually({
-          title: manualTitle,
-          summary: manualSummary,
-          content: textInput,
-          tags: manualTags.split(',').map(tag => tag.trim()).filter(Boolean),
-        });
       }
 
       clearInterval(interval);
@@ -211,15 +217,46 @@ export default function Create() {
       <div className="card-glow p-6 sm:p-8">
         {mode === 'voice' ? (
           <div className="space-y-5">
+            {!aiEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Title</label>
+                  <input
+                    value={manualTitle}
+                    onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Post title"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Summary</label>
+                  <input
+                    value={manualSummary}
+                    onChange={(e) => setManualSummary(e.target.value)}
+                    placeholder="Short hook summary (optional)"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Tags</label>
+                  <input
+                    value={manualTags}
+                    onChange={(e) => setManualTags(e.target.value)}
+                    placeholder="Comma-separated tags"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+              </div>
+            )}
             <VoiceRecorder
               onRecordingComplete={setAudioBlob}
-              disabled={processing || !aiEnabled}
+              disabled={processing}
             />
             <div className="text-center">
               <p className="text-xs text-zinc-700 leading-relaxed max-w-sm mx-auto">
                 {aiEnabled
                   ? 'Speak naturally — ramble, digress, use slang. AI will find the story in your words and keep your authentic voice.'
-                  : 'Classic mode does not support voice recordings. Switch to Text or enable AI mode to use voice input.'}
+                  : 'Speak naturally — your recording will be transcribed to text and saved as the post content.'}
               </p>
             </div>
           </div>

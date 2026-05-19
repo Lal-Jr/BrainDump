@@ -50,6 +50,20 @@ export async function createPostFromVoice(audioBlob) {
   }));
 }
 
+export async function createPostFromVoiceManual(audioBlob, { title, summary = '', tags = [] } = {}) {
+  const form = new FormData();
+  form.append('audio', audioBlob, 'recording.webm');
+  if (title) form.append('title', title);
+  if (summary) form.append('summary', summary);
+  if (Array.isArray(tags)) form.append('tags', JSON.stringify(tags));
+
+  return handleRes(await fetch(`${API}/from-voice-manual`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: form,
+  }));
+}
+
 export async function createPostFromText(text, { style, tone } = {}) {
   return handleRes(await fetch(`${API}/from-text`, {
     method: 'POST',
