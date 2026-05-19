@@ -189,6 +189,28 @@ router.post('/from-text', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/posts/manual — create post without AI generation (admin only)
+router.post('/manual', requireAuth, async (req, res) => {
+  try {
+    const { title, summary = '', content, tags = [] } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required for manual posts.' });
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required for manual posts.' });
+
+    const post = await createPost({
+      title: title.trim(),
+      summary: summary.trim(),
+      content,
+      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+      published: false,
+    });
+
+    res.json({ post });
+  } catch (e) {
+    console.error('Manual post creation failed:', e);
+    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
+  }
+});
+
 // PUT /api/posts/:id — update post (admin only)
 router.put('/:id', requireAuth, async (req, res) => {
   try {

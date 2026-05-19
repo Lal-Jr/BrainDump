@@ -58,6 +58,14 @@ export async function createPostFromText(text, { style, tone } = {}) {
   }));
 }
 
+export async function createPostManually({ title, summary, content, tags }) {
+  return handleRes(await fetch(`${API}/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ title, summary, content, tags }),
+  }));
+}
+
 export async function updatePost(id, data) {
   return handleRes(await fetch(`${API}/${id}`, {
     method: 'PUT',

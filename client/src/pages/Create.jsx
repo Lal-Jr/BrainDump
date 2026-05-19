@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceRecorder from '../components/VoiceRecorder';
-import { createPostFromVoice, createPostFromText } from '../api';
+import { createPostFromVoice, createPostFromText, createPostManually } from '../api';
 import { useToast } from '../context/ToastContext';
 
 const VOICE_STEPS = [
@@ -35,15 +35,23 @@ const TONES = [
 export default function Create() {
   const navigate = useNavigate();
   const [mode, setMode] = useState('voice');
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [audioBlob, setAudioBlob] = useState(null);
   const [textInput, setTextInput] = useState('');
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualSummary, setManualSummary] = useState('');
+  const [manualTags, setManualTags] = useState('');
   const [style, setStyle] = useState('editorial');
   const [tone, setTone] = useState('thoughtful');
   const [processing, setProcessing] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const toast = useToast();
 
-  const steps = mode === 'voice' ? VOICE_STEPS : TEXT_STEPS;
+  const steps = aiEnabled
+    ? mode === 'voice'
+      ? VOICE_STEPS
+      : TEXT_STEPS
+    : [{ label: 'Saving your post...', sub: 'Creating a classic draft' }];
 
   const handleGenerate = async () => {
     try {
@@ -55,12 +63,30 @@ export default function Create() {
       }, 6000);
 
       let result;
-      if (mode === 'voice') {
-        if (!audioBlob) { clearInterval(interval); setProcessing(false); return toast.error('Record something first!'); }
-        result = await createPostFromVoice(audioBlob);
+      if (aiEnabled) {
+        if (mode === 'voice') {
+          if (!audioBlob) { clearInterval(interval); setProcessing(false); return toast.error('Record something first!'); }
+          result = await createPostFromVoice(audioBlob);
+        } else {
+          if (!textInput.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Type something first!'); }
+          result = await createPostFromText(textInput, { style, tone });
+        }
       } else {
-        if (!textInput.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Type something first!'); }
-        result = await createPostFromText(textInput, { style, tone });
+        if (mode === 'voice') {
+          clearInterval(interval);
+          setProcessing(false);
+          return toast.error('Classic mode only supports typed posts. Switch to Text or enable AI.');
+        }
+
+        if (!manualTitle.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Add a title for your post.'); }
+        if (!textInput.trim()) { clearInterval(interval); setProcessing(false); return toast.error('Write the post content first.'); }
+
+        result = await createPostManually({
+          title: manualTitle,
+          summary: manualSummary,
+          content: textInput,
+          tags: manualTags.split(',').map(tag => tag.trim()).filter(Boolean),
+        });
       }
 
       clearInterval(interval);
@@ -143,7 +169,22 @@ export default function Create() {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+        <div className="inline-flex rounded-full border border-zinc-800/60 bg-zinc-950/80 p-1 shadow-sm">
+          <button
+            onClick={() => setAiEnabled(true)}
+            className={`px-4 py-2 text-sm font-medium transition ${aiEnabled ? 'bg-brand-500 text-white shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+          >
+            AI mode
+          </button>
+          <button
+            onClick={() => setAiEnabled(false)}
+            className={`px-4 py-2 text-sm font-medium transition ${!aiEnabled ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+          >
+            Classic mode
+          </button>
+        </div>
+
         <div className="tab-group">
           <button
             onClick={() => { setMode('voice'); }}
@@ -172,69 +213,111 @@ export default function Create() {
           <div className="space-y-5">
             <VoiceRecorder
               onRecordingComplete={setAudioBlob}
-              disabled={processing}
+              disabled={processing || !aiEnabled}
             />
             <div className="text-center">
               <p className="text-xs text-zinc-700 leading-relaxed max-w-sm mx-auto">
-                Speak naturally — ramble, digress, use slang. AI will find the story in your words and keep your authentic voice.
+                {aiEnabled
+                  ? 'Speak naturally — ramble, digress, use slang. AI will find the story in your words and keep your authentic voice.'
+                  : 'Classic mode does not support voice recordings. Switch to Text or enable AI mode to use voice input.'}
               </p>
             </div>
           </div>
         ) : (
           <div className="space-y-5">
+            {!aiEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Title</label>
+                  <input
+                    value={manualTitle}
+                    onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Post title"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Summary</label>
+                  <input
+                    value={manualSummary}
+                    onChange={(e) => setManualSummary(e.target.value)}
+                    placeholder="Short hook summary (optional)"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-2">Tags</label>
+                  <input
+                    value={manualTags}
+                    onChange={(e) => setManualTags(e.target.value)}
+                    placeholder="Comma-separated tags"
+                    className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-4 py-3 text-zinc-200 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200"
+                  />
+                </div>
+              </div>
+            )}
+
             <textarea
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Drop your notes, bullet points, rough ideas, or stream of consciousness here..."
+              placeholder={aiEnabled
+                ? 'Drop your notes, bullet points, rough ideas, or stream of consciousness here...'
+                : 'Write your post content exactly as you want it published...'}
               rows={8}
               className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-5 py-4 text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200 resize-y min-h-[180px] text-[15px] leading-relaxed"
             />
 
-            {/* Style selector */}
-            <div>
-              <p className="text-xs text-zinc-500 font-medium mb-2.5">Post Style</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {STYLES.map(s => (
-                  <button
-                    key={s.key}
-                    onClick={() => setStyle(s.key)}
-                    className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                      style === s.key
-                        ? 'border-brand-500/40 bg-brand-500/[0.06] ring-1 ring-brand-500/20'
-                        : 'border-zinc-800/40 hover:border-zinc-700/60 hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <span className="text-base">{s.icon}</span>
-                    <p className={`text-sm font-medium mt-1 ${style === s.key ? 'text-zinc-100' : 'text-zinc-400'}`}>{s.label}</p>
-                    <p className="text-[10px] text-zinc-600 mt-0.5">{s.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {aiEnabled ? (
+              <>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium mb-2.5">Post Style</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {STYLES.map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setStyle(s.key)}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                          style === s.key
+                            ? 'border-brand-500/40 bg-brand-500/[0.06] ring-1 ring-brand-500/20'
+                            : 'border-zinc-800/40 hover:border-zinc-700/60 hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        <span className="text-base">{s.icon}</span>
+                        <p className={`text-sm font-medium mt-1 ${style === s.key ? 'text-zinc-100' : 'text-zinc-400'}`}>{s.label}</p>
+                        <p className="text-[10px] text-zinc-600 mt-0.5">{s.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Tone selector */}
-            <div>
-              <p className="text-xs text-zinc-500 font-medium mb-2.5">Tone</p>
-              <div className="flex flex-wrap gap-2">
-                {TONES.map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTone(t.key)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-                      tone === t.key
-                        ? 'bg-brand-500/15 text-brand-400 ring-1 ring-brand-500/30'
-                        : 'bg-zinc-800/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+                <div>
+                  <p className="text-xs text-zinc-500 font-medium mb-2.5">Tone</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TONES.map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => setTone(t.key)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                          tone === t.key
+                            ? 'bg-brand-500/15 text-brand-400 ring-1 ring-brand-500/30'
+                            : 'bg-zinc-800/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <p className="text-xs text-zinc-700 leading-relaxed">
-              AI will expand your notes into a full {style === 'editorial' ? 'essay' : style === 'listicle' ? 'list post' : style === 'tutorial' ? 'guide' : 'story'} with a {tone} tone — adding depth, structure, and polish.
-            </p>
+                <p className="text-xs text-zinc-700 leading-relaxed">
+                  AI will expand your notes into a full {style === 'editorial' ? 'essay' : style === 'listicle' ? 'list post' : style === 'tutorial' ? 'guide' : 'story'} with a {tone} tone — adding depth, structure, and polish.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-zinc-700 leading-relaxed">
+                Classic mode saves your text exactly as written. Add a title, optional summary, and any tags you want, then publish from the editor.
+              </p>
+            )}
           </div>
         )}
       </div>
