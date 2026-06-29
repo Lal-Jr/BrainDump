@@ -1,21 +1,21 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceRecorder from '../components/VoiceRecorder';
 import { createPostFromVoice, createPostFromText, createPostManually, createPostFromVoiceManual } from '../api';
 import { useToast } from '../context/ToastContext';
 
 const VOICE_STEPS = [
-  { label: 'Transcribing audio...', sub: 'Whisper is converting your speech to text' },
-  { label: 'Capturing your voice...', sub: 'Finding the narrative thread in your thoughts' },
-  { label: 'Writing the post...', sub: 'Preserving your personality and tone' },
-  { label: 'Adding finishing touches...', sub: 'Generating title, tags, and imagery' },
+  { label: 'Preparing audio...', sub: 'Turning your recording into a draft' },
+  { label: 'Organizing notes...', sub: 'Keeping the main ideas in order' },
+  { label: 'Building the post...', sub: 'Shaping the draft into a readable piece' },
+  { label: 'Finishing up...', sub: 'Adding title, tags, and media' },
 ];
 
 const TEXT_STEPS = [
-  { label: 'Analyzing your notes...', sub: 'Understanding the key ideas and themes' },
-  { label: 'Expanding your ideas...', sub: 'Adding depth, examples, and structure' },
-  { label: 'Polishing the post...', sub: 'Refining tone, flow, and formatting' },
-  { label: 'Finalizing...', sub: 'Generating title, tags, and imagery' },
+  { label: 'Reading your notes...', sub: 'Picking out the key points' },
+  { label: 'Drafting the post...', sub: 'Turning notes into a fuller piece' },
+  { label: 'Polishing the draft...', sub: 'Checking flow and structure' },
+  { label: 'Finishing up...', sub: 'Adding title, tags, and media' },
 ];
 
 const STYLES = [
@@ -46,6 +46,8 @@ export default function Create() {
   const [processing, setProcessing] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const toast = useToast();
+  const textInputRef = useRef(null);
+  const imageInputRef = useRef(null);
 
   const steps = aiEnabled
     ? mode === 'voice'
@@ -66,15 +68,53 @@ export default function Create() {
 
   const submitLabel = aiEnabled
     ? mode === 'voice'
-      ? 'Transform Recording'
-      : 'Generate Post'
-    : 'Create Post';
+      ? 'Create from voice'
+      : 'Create post'
+    : 'Create post';
 
   const heroDescription = aiEnabled
     ? mode === 'voice'
-      ? 'Record your thoughts. AI preserves your voice.'
-      : 'Jot your ideas. AI expands them into a full post.'
-    : 'Write your post manually and publish it as-is.';
+      ? 'Capture an idea with voice or text.'
+      : 'Start with notes and turn them into a post.'
+    : 'Write the post yourself and publish it directly.';
+
+  const insertSnippet = (snippet) => {
+    const textarea = textInputRef.current;
+    const start = textarea?.selectionStart ?? textInput.length;
+    const end = textarea?.selectionEnd ?? textInput.length;
+    const nextValue = `${textInput.slice(0, start)}${snippet}${textInput.slice(end)}`;
+    setTextInput(nextValue);
+
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        const cursor = start + snippet.length;
+        textarea.setSelectionRange(cursor, cursor);
+      }
+    });
+  };
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const caption = window.prompt('Image caption', file.name.replace(/\.[^.]+$/, '')) || 'Image';
+      const snippet = `\n\n![${caption}](${reader.result})\n\n<figcaption>${caption}</figcaption>\n`;
+      insertSnippet(snippet);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handleEmbedInsert = () => {
+    const type = window.prompt('Embed type', 'video')?.toLowerCase();
+    const url = window.prompt('Embed URL', 'https://');
+    if (!url) return;
+    const snippet = type === 'pdf' ? `\n\n{{pdf:${url}}}\n` : `\n\n{{video:${url}}}\n`;
+    insertSnippet(snippet);
+  };
 
   const handleGenerate = async () => {
     try {
@@ -159,22 +199,7 @@ export default function Create() {
           <p className="text-sm text-zinc-600">{step.sub}</p>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-64">
-          <div className="h-1 bg-zinc-800/60 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out ${isVoice ? 'bg-violet-500' : 'bg-brand-500'}`}
-              style={{ width: `${((stepIdx + 1) / steps.length) * 100}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-2">
-            {steps.map((_, i) => (
-              <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
-                i <= stepIdx ? (isVoice ? 'bg-violet-500' : 'bg-brand-500') : 'bg-zinc-800'
-              }`} />
-            ))}
-          </div>
-        </div>
+        <div className={`h-10 w-10 rounded-full border-2 border-zinc-800 border-t-current ${isVoice ? 'text-violet-500' : 'text-brand-500'} animate-spin`} />
       </div>
     );
   }
@@ -187,10 +212,10 @@ export default function Create() {
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
           </svg>
-          {aiEnabled ? 'AI-Powered' : 'Manual Mode'}
+          {aiEnabled ? 'Assist' : 'Manual'}
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold text-zinc-50 tracking-tight">
-          Brain Dump
+          Write
         </h1>
         <p className="text-zinc-500 mt-3 text-base sm:text-lg max-w-md mx-auto leading-relaxed">
           {heroDescription}
@@ -204,7 +229,7 @@ export default function Create() {
           className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${aiEnabled ? 'border-brand-500/40 bg-brand-500/10 text-brand-300 shadow-sm' : 'border-zinc-800/60 bg-zinc-950/80 text-zinc-300 hover:text-white'}`}
         >
           <span className={`h-2.5 w-2.5 rounded-full ${aiEnabled ? 'bg-brand-400' : 'bg-zinc-600'}`} />
-          {aiEnabled ? 'AI On' : 'AI Off'}
+          {aiEnabled ? 'Assist on' : 'Assist off'}
         </button>
 
         {aiEnabled && (
@@ -273,8 +298,8 @@ export default function Create() {
             <div className="text-center">
               <p className="text-xs text-zinc-700 leading-relaxed max-w-sm mx-auto">
                 {aiEnabled
-                  ? 'Speak naturally — ramble, digress, use slang. AI will find the story in your words and keep your authentic voice.'
-                  : 'Speak naturally — your recording will be transcribed to text and saved as the post content.'}
+                  ? 'Speak naturally and keep the draft close to your original thought.'
+                  : 'Speak naturally and save the recording as the post content.'}
               </p>
             </div>
           </div>
@@ -312,12 +337,25 @@ export default function Create() {
               </div>
             )}
 
+            {!aiEnabled && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-3 py-2">
+                <button type="button" onClick={() => imageInputRef.current?.click()} className="rounded-full border border-zinc-800/60 px-3 py-1.5 text-xs text-zinc-400 transition hover:text-zinc-100">
+                  + Image
+                </button>
+                <button type="button" onClick={handleEmbedInsert} className="rounded-full border border-zinc-800/60 px-3 py-1.5 text-xs text-zinc-400 transition hover:text-zinc-100">
+                  + Media
+                </button>
+                <span className="ml-auto text-[11px] uppercase tracking-[0.24em] text-zinc-700">Markdown ready</span>
+              </div>
+            )}
+            {!aiEnabled && <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />}
             <textarea
+              ref={textInputRef}
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={aiEnabled
-                ? 'Drop your notes, bullet points, rough ideas, or stream of consciousness here...'
-                : 'Write your post content exactly as you want it published...'}
+                ? 'Drop your notes, bullets, or rough ideas here...'
+                : 'Write your post content here...'}
               rows={8}
               className="w-full bg-transparent border border-zinc-800/60 rounded-xl px-5 py-4 text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20 transition-all duration-200 resize-y min-h-[180px] text-[15px] leading-relaxed"
             />
@@ -365,7 +403,7 @@ export default function Create() {
                 </div>
 
                 <p className="text-xs text-zinc-700 leading-relaxed">
-                  AI will expand your notes into a full {style === 'editorial' ? 'essay' : style === 'listicle' ? 'list post' : style === 'tutorial' ? 'guide' : 'story'} with a {tone} tone — adding depth, structure, and polish.
+                  Use a simple structure and tone to shape the draft into a finished post.
                 </p>
               </>
             ) : (
@@ -398,11 +436,9 @@ export default function Create() {
               Voice
             </span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Transcribe</span>
+            <span>Draft</span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Your voice, polished</span>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Image + tags</span>
+            <span>Publish</span>
           </div>
         ) : (
           <div className="flex items-center gap-3 text-[11px] text-zinc-700 font-medium">
@@ -411,11 +447,9 @@ export default function Create() {
               Notes
             </span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Expand + enrich</span>
+            <span>Draft</span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Style + polish</span>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
-            <span>Image + SEO tags</span>
+            <span>Publish</span>
           </div>
         )}
       </div>

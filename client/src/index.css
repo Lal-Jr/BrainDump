@@ -29,13 +29,13 @@
   body {
     @apply min-h-screen bg-surface-50 text-zinc-100;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-family: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
   }
 
   ::selection {
     @apply bg-brand-500/30 text-white;
   }
 
-  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -52,7 +52,6 @@
 }
 
 @layer components {
-  /* ---------- Buttons ---------- */
   .btn-primary {
     @apply relative px-5 py-2.5 bg-brand-600 text-white font-medium rounded-xl
       transition-all duration-200 ease-out
@@ -104,10 +103,8 @@
       active:scale-[0.97];
   }
 
-  /* ---------- Cards ---------- */
   .card {
-    @apply bg-surface-200/80 backdrop-blur-xl border border-zinc-800/60 rounded-2xl
-      transition-all duration-300 ease-out;
+    @apply bg-surface-200/80 backdrop-blur-xl border border-zinc-800/60 rounded-2xl transition-all duration-300 ease-out;
   }
   .card-hover {
     @apply card hover:bg-surface-300/80 hover:border-zinc-700/60 hover:shadow-2xl hover:shadow-black/20;
@@ -117,14 +114,25 @@
   }
   .card-glow::before {
     content: '';
-    @apply absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-gradient-radial from-brand-500/5 via-transparent to-transparent
-      opacity-0 transition-opacity duration-500 pointer-events-none;
+    @apply absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-gradient-radial from-brand-500/5 via-transparent to-transparent opacity-0 transition-opacity duration-500 pointer-events-none;
   }
   .card-glow:hover::before {
     @apply opacity-100;
   }
 
-  /* ---------- Glass ---------- */
+  .retro-panel {
+    @apply rounded-[24px] border border-zinc-800/70 bg-surface-200/70 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl;
+  }
+  .retro-pill {
+    @apply inline-flex items-center rounded-full border border-brand-500/20 bg-brand-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-brand-300;
+  }
+  .retro-chip {
+    @apply inline-flex items-center rounded-full border border-zinc-800/60 bg-surface-300/70 px-2.5 py-1 text-[11px] font-medium text-zinc-400;
+  }
+  .retro-terminal {
+    @apply rounded-2xl border border-zinc-800/80 bg-surface-100/80 p-4 font-mono text-sm text-zinc-300 shadow-inner shadow-black/30;
+  }
+
   .glass {
     @apply bg-white/[0.03] backdrop-blur-2xl border border-white/[0.06] rounded-2xl;
   }
@@ -132,30 +140,23 @@
     @apply bg-white/[0.06] backdrop-blur-3xl border border-white/[0.08] rounded-2xl;
   }
 
-  /* ---------- Pill tabs ---------- */
   .tab-group {
     @apply inline-flex gap-0.5 bg-surface-200 rounded-xl p-1 border border-zinc-800/40;
   }
   .tab-item {
-    @apply px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 capitalize
-      text-zinc-500 hover:text-zinc-300;
+    @apply px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 capitalize text-zinc-500 hover:text-zinc-300;
   }
   .tab-item-active {
     @apply tab-item bg-surface-400 text-zinc-100 shadow-sm;
   }
 
-  /* ---------- Input ---------- */
   .input {
-    @apply w-full bg-surface-200 border border-zinc-800/60 rounded-xl px-4 py-3
-      text-sm text-zinc-200 placeholder:text-zinc-600
-      outline-none transition-all duration-200
-      focus:border-brand-500/50 focus:ring-1 focus:ring-brand-500/20 focus:bg-surface-300;
+    @apply w-full bg-surface-200 border border-zinc-800/60 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-brand-500/50 focus:ring-1 focus:ring-brand-500/20 focus:bg-surface-300;
   }
   .input-lg {
     @apply input text-base px-5 py-4;
   }
 
-  /* ---------- Badge ---------- */
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
@@ -169,7 +170,6 @@
     @apply badge bg-brand-500/10 text-brand-400 ring-1 ring-brand-500/15;
   }
 
-  /* ---------- Prose / Markdown ---------- */
   .prose-custom h1 {
     @apply text-2xl sm:text-3xl font-bold text-zinc-50 mt-10 mb-4 tracking-tight;
   }
@@ -195,16 +195,13 @@
     @apply list-decimal;
   }
   .prose-custom blockquote {
-    @apply border-l-2 border-brand-500 pl-5 py-2 my-6 text-zinc-400 italic
-      bg-brand-500/[0.03] rounded-r-xl;
+    @apply border-l-2 border-brand-500 pl-5 py-2 my-6 text-zinc-400 italic bg-brand-500/[0.03] rounded-r-xl;
   }
   .prose-custom code {
-    @apply bg-surface-400 text-brand-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono
-      ring-1 ring-zinc-800/50;
+    @apply bg-surface-400 text-brand-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono ring-1 ring-zinc-800/50;
   }
   .prose-custom pre {
-    @apply bg-surface-200 border border-zinc-800/60 rounded-xl p-5 overflow-x-auto mb-6
-      text-[13px] leading-relaxed;
+    @apply bg-surface-200 border border-zinc-800/60 rounded-xl p-5 overflow-x-auto mb-6 text-[13px] leading-relaxed;
   }
   .prose-custom pre code {
     @apply bg-transparent p-0 ring-0;
@@ -212,9 +209,23 @@
   .prose-custom img {
     @apply rounded-2xl my-8 w-full shadow-2xl shadow-black/30;
   }
+  .prose-custom figcaption {
+    @apply -mt-6 mb-8 text-center text-sm text-zinc-500;
+  }
+  .prose-custom table {
+    @apply w-full my-8 overflow-hidden rounded-2xl border border-zinc-800/60 text-sm;
+  }
+  .prose-custom th, .prose-custom td {
+    @apply border border-zinc-800/60 px-3 py-2 text-left;
+  }
+  .prose-custom th {
+    @apply bg-surface-300 text-zinc-100;
+  }
+  .prose-custom td {
+    @apply bg-surface-200/70 text-zinc-400;
+  }
   .prose-custom a {
-    @apply text-brand-400 hover:text-brand-300 underline underline-offset-4 decoration-brand-500/30
-      hover:decoration-brand-400/60 transition-colors;
+    @apply text-brand-400 hover:text-brand-300 underline underline-offset-4 decoration-brand-500/30 hover:decoration-brand-400/60 transition-colors;
   }
   .prose-custom hr {
     @apply border-zinc-800/60 my-10;
@@ -225,9 +236,17 @@
   .prose-custom em {
     @apply text-zinc-300;
   }
+  .prose-custom .task-list-item {
+    @apply flex items-center gap-2;
+  }
+  .prose-custom .embed-shell {
+    @apply my-8 overflow-hidden rounded-2xl border border-zinc-800/60 bg-surface-200/70 p-2;
+  }
+  .prose-custom .embed-shell iframe, .prose-custom .embed-shell video {
+    @apply h-72 w-full rounded-xl border-0;
+  }
 }
 
-/* ---------- Animations ---------- */
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 0.5; }
   100% { transform: scale(2.2); opacity: 0; }
@@ -244,7 +263,6 @@
   animation: pulse-ring-2 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 0.3s;
 }
 
-/* Audio visualizer bars */
 @keyframes eq-bar {
   0%, 100% { height: 4px; }
   50% { height: 20px; }
@@ -253,7 +271,6 @@
   animation: eq-bar 0.8s ease-in-out infinite;
 }
 
-/* Gradient border */
 .gradient-border {
   position: relative;
 }
@@ -270,7 +287,6 @@
   pointer-events: none;
 }
 
-/* Noise texture overlay */
 .noise::after {
   content: '';
   position: fixed;
@@ -281,7 +297,6 @@
   z-index: 9999;
 }
 
-/* Toast */
 .toast-enter {
   animation: fadeInDown 0.3s ease-out, fadeOut 0.3s ease-in 2.2s forwards;
 }

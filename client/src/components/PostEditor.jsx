@@ -124,14 +124,14 @@ export default function PostEditor({ initialContent, initialTitle, initialTags, 
             onClick={() => setPreviewMode('write')}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${previewMode === 'write' ? 'bg-brand-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
           >
-            Write
+            Edit
           </button>
           <button
             type="button"
             onClick={() => setPreviewMode('preview')}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${previewMode === 'preview' ? 'bg-brand-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
           >
-            Live preview
+            Preview
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -147,7 +147,11 @@ export default function PostEditor({ initialContent, initialTitle, initialTags, 
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
       {previewMode === 'preview' ? (
-        <div className="retro-panel p-5">
+        <div className="rounded-3xl border border-zinc-800/60 bg-surface-200/40 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-600">Preview</p>
+            <span className="text-[11px] text-zinc-700">Rendered markdown</span>
+          </div>
           <MarkdownRenderer content={content} />
         </div>
       ) : (

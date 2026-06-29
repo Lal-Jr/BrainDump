@@ -13,10 +13,11 @@ export default function View() {
   const [error, setError] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [favorites, setFavorites] = useState([]);
-  const [privateNote, setPrivateNote] = useState('');
+  const [inlineNotes, setInlineNotes] = useState({});
+  const [activeNoteBlock, setActiveNoteBlock] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [noteSaved, setNoteSaved] = useState(false);
 
   const isPublicView = !location.pathname.startsWith('/admin');
 
@@ -31,19 +32,16 @@ export default function View() {
   }, []);
 
   useEffect(() => {
-    if (!post?.id) return;
-    const savedNote = window.localStorage.getItem(`brain-dump-note-${post.id}`) || '';
-    setPrivateNote(savedNote);
+    if (!post?.id || typeof window === 'undefined') return;
+    try {
+      const saved = window.localStorage.getItem(`brain-dump-inline-notes-${post.id}`);
+      if (saved) {
+        setInlineNotes(JSON.parse(saved));
+      }
+    } catch {
+      setInlineNotes({});
+    }
   }, [post?.id]);
-
-  useEffect(() => {
-    if (!post?.id) return;
-    const timer = window.setTimeout(() => {
-      window.localStorage.setItem(`brain-dump-note-${post.id}`, privateNote);
-      setNoteSaved(true);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [post?.id, privateNote]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -83,6 +81,28 @@ export default function View() {
     window.localStorage.setItem('brain-dump-favorites', JSON.stringify(next));
   };
 
+  const openNoteEditor = (index) => {
+    setActiveNoteBlock(index);
+    setNoteDraft(inlineNotes[index] || '');
+  };
+
+  const saveNote = (index) => {
+    const next = { ...inlineNotes };
+    const trimmed = noteDraft.trim();
+    if (trimmed) {
+      next[index] = trimmed;
+    } else {
+      delete next[index];
+    }
+
+    setInlineNotes(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`brain-dump-inline-notes-${post.id}`, JSON.stringify(next));
+    }
+    setActiveNoteBlock(null);
+    setNoteDraft('');
+  };
+
   if (loading) return <LoadingSpinner text="Loading post..." />;
 
   if (error || !post) {
@@ -111,6 +131,7 @@ export default function View() {
     year: 'numeric',
   });
   const isFavorite = favorites.includes(post.id);
+  const contentBlocks = (post.content || '').split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
 
   return (
     <div className={isPublicView ? 'min-h-screen bg-surface-50' : ''}>
@@ -121,8 +142,14 @@ export default function View() {
       )}
 
       {isPublicView && (
-        <div className="fixed top-0 left-0 z-[60] h-1 w-full bg-zinc-950/80">
-          <div className="h-full rounded-r-full bg-gradient-to-r from-brand-400 via-cyan-400 to-fuchsia-500 transition-all duration-200" style={{ width: `${Math.min(progress, 100)}%` }} />
+        <div className="fixed top-0 left-0 z-[60] w-full border-b border-zinc-800/60 bg-zinc-950/85 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2 sm:px-6">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Reading</span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-800/80">
+              <div className="h-full rounded-full bg-gradient-to-r from-brand-400 via-cyan-400 to-fuchsia-500 transition-all duration-200" style={{ width: `${Math.min(progress, 100)}%` }} />
+            </div>
+            <span className="text-[10px] font-semibold text-zinc-300">{Math.round(progress)}%</span>
+          </div>
         </div>
       )}
 
@@ -152,8 +179,8 @@ export default function View() {
 
         <div className="retro-panel mb-8 overflow-hidden p-6 sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="retro-pill mb-3">Retro notebook • {date}</p>
+            <div className="max-w-2xl">
+              <p className="retro-pill mb-3">{date}</p>
               <h1 className="text-3xl sm:text-5xl font-extrabold text-zinc-50 leading-[1.15] tracking-tight animate-fade-in-up">
                 {post.title}
               </h1>
@@ -163,35 +190,15 @@ export default function View() {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              className={`rounded-full border px-3 py-2 text-sm font-medium transition ${isFavorite ? 'border-brand-500/40 bg-brand-500/10 text-brand-300' : 'border-zinc-800/60 bg-surface-200/70 text-zinc-400 hover:text-zinc-100'}`}
-            >
-              {isFavorite ? '★ Favorited' : '☆ Favorite'}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-8 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="retro-panel p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-fuchsia-600 text-sm font-semibold text-white shadow-lg shadow-brand-500/20">
-                HD
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-100">Harish Lal</p>
-                <p className="text-sm text-zinc-500">Writer, tinkerer, and collector of noisy thoughts.</p>
-              </div>
+            <div className="flex flex-col items-end gap-3">
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                className={`rounded-full border px-3 py-2 text-sm font-medium transition ${isFavorite ? 'border-brand-500/40 bg-brand-500/10 text-brand-300' : 'border-zinc-800/60 bg-surface-200/70 text-zinc-400 hover:text-zinc-100'}`}
+              >
+                {isFavorite ? '★ Favorited' : '☆ Favorite'}
+              </button>
             </div>
-          </div>
-
-          <div className="retro-panel p-5">
-            <p className="retro-pill mb-3">Reading progress</p>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-800/70">
-              <div className="h-full rounded-full bg-gradient-to-r from-brand-400 via-cyan-400 to-fuchsia-500 transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
-            </div>
-            <p className="mt-3 text-sm text-zinc-500">You are at about {Math.round(progress)}% of this article.</p>
           </div>
         </div>
 
@@ -200,67 +207,93 @@ export default function View() {
           {post.tags?.length > 0 && post.tags.map(tag => <span key={tag} className="retro-chip">{tag}</span>)}
         </div>
 
-        <div className="mb-10 rounded-3xl border border-zinc-800/60 bg-surface-200/50 p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-600">Private notes</p>
-              <p className="text-sm text-zinc-500">Saved only in this browser.</p>
+        <div className="mb-10">
+          <div className="mb-10 h-px bg-gradient-to-r from-zinc-800 via-zinc-700/30 to-transparent" />
+
+          <div className="space-y-8">
+            {contentBlocks.length > 0 ? contentBlocks.map((block, index) => (
+              <div key={`${post.id}-${index}`} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => openNoteEditor(index)}
+                  className="absolute -left-2 top-1 hidden rounded-full border border-zinc-800/70 bg-surface-200/80 p-1.5 text-sm text-zinc-400 transition hover:border-brand-500/40 hover:text-brand-300 md:block"
+                  aria-label="Add note"
+                >
+                  +
+                </button>
+                <div className="rounded-2xl border border-transparent px-2 py-1 transition hover:border-zinc-800/50 hover:bg-white/[0.02] md:pl-4">
+                  <MarkdownRenderer content={block} />
+                  {inlineNotes[index] && (
+                    <div className="mt-3 max-w-xl rounded-2xl border border-zinc-800/60 bg-zinc-950/70 p-3 text-sm text-zinc-400 opacity-0 shadow-lg shadow-black/20 transition group-hover:opacity-100">
+                      {inlineNotes[index]}
+                    </div>
+                  )}
+                  {activeNoteBlock === index && (
+                    <div className="mt-3 max-w-xl rounded-2xl border border-zinc-800/60 bg-surface-200/70 p-3 shadow-lg shadow-black/20">
+                      <textarea
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        rows={4}
+                        placeholder="Add a tiny note here..."
+                        className="w-full rounded-2xl border border-zinc-800/60 bg-surface-100/70 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20"
+                      />
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveNoteBlock(null);
+                            setNoteDraft('');
+                          }}
+                          className="rounded-full border border-zinc-800/70 px-3 py-1.5 text-sm text-zinc-400 transition hover:text-zinc-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveNote(index)}
+                          className="rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-sm text-brand-300 transition hover:bg-brand-500/20"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )) : <MarkdownRenderer content={post.content} />}
+          </div>
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-[1fr]">
+            <div className="retro-panel p-5">
+              <p className="retro-pill mb-3">Timeline</p>
+              <div className="space-y-3">
+                {timeline.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No other posts yet.</p>
+                ) : timeline.map(item => (
+                  <Link key={item.id} to={`/${item.slug}`} className="block rounded-2xl border border-zinc-800/50 bg-surface-200/60 p-3 transition hover:border-brand-500/30 hover:bg-surface-200">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-600">{new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                    <p className="mt-1 text-sm font-medium text-zinc-200">{item.title}</p>
+                  </Link>
+                ))}
+              </div>
             </div>
-            <span className="text-xs text-zinc-600">{noteSaved ? 'Saved' : 'Saving...'}</span>
           </div>
-          <textarea
-            value={privateNote}
-            onChange={(e) => {
-              setPrivateNote(e.target.value);
-              setNoteSaved(false);
-            }}
-            rows={5}
-            placeholder="Keep a private note for this article..."
-            className="w-full rounded-2xl border border-zinc-800/60 bg-surface-100/70 px-4 py-3 text-sm text-zinc-200 outline-none transition focus:border-brand-500/40 focus:ring-1 focus:ring-brand-500/20"
-          />
-        </div>
 
-        <div className="mb-10 h-px bg-gradient-to-r from-zinc-800 via-zinc-700/30 to-transparent" />
+          {(isPublicView || post.published) && (
+            <Comments postId={post.id} isAdmin={!isPublicView} />
+          )}
 
-        <MarkdownRenderer content={post.content} />
-
-        <div className="mt-10 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="retro-panel p-5">
-            <p className="retro-pill mb-3">Timeline</p>
-            <div className="space-y-3">
-              {timeline.length === 0 ? (
-                <p className="text-sm text-zinc-500">No other posts yet.</p>
-              ) : timeline.map(item => (
-                <Link key={item.id} to={`/${item.slug}`} className="block rounded-2xl border border-zinc-800/50 bg-surface-200/60 p-3 transition hover:border-brand-500/30 hover:bg-surface-200">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-600">{new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-200">{item.title}</p>
-                </Link>
-              ))}
+          {!isPublicView && (
+            <div className="mt-16 pt-8 border-t border-zinc-800/50">
+              <Link to={`/admin/edit/${post.id}`} className="btn-secondary text-sm inline-flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                </svg>
+                Edit this post
+              </Link>
             </div>
-          </div>
-
-          <div className="retro-panel p-5">
-            <p className="retro-pill mb-3">Reader notes</p>
-            <p className="text-sm leading-relaxed text-zinc-400">
-              The layout now leans into a retro terminal palette, with whisper-soft highlights, compact cards, and a more tactile reading experience for long-form writing.
-            </p>
-          </div>
+          )}
         </div>
-
-        {(isPublicView || post.published) && (
-          <Comments postId={post.id} isAdmin={!isPublicView} />
-        )}
-
-        {!isPublicView && (
-          <div className="mt-16 pt-8 border-t border-zinc-800/50">
-            <Link to={`/admin/edit/${post.id}`} className="btn-secondary text-sm inline-flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-              </svg>
-              Edit this post
-            </Link>
-          </div>
-        )}
       </article>
     </div>
   );
