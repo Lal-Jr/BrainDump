@@ -53,6 +53,29 @@ export default function Create() {
       : TEXT_STEPS
     : [{ label: 'Saving your post...', sub: 'Creating a classic draft' }];
 
+  const handleAiToggle = (enabled) => {
+    setAiEnabled(enabled);
+    if (!enabled) setMode('text');
+  };
+
+  const isSubmitDisabled = processing || (aiEnabled
+    ? mode === 'voice'
+      ? !audioBlob
+      : !textInput.trim()
+    : !manualTitle.trim() || !textInput.trim());
+
+  const submitLabel = aiEnabled
+    ? mode === 'voice'
+      ? 'Transform Recording'
+      : 'Generate Post'
+    : 'Create Post';
+
+  const heroDescription = aiEnabled
+    ? mode === 'voice'
+      ? 'Record your thoughts. AI preserves your voice.'
+      : 'Jot your ideas. AI expands them into a full post.'
+    : 'Write your post manually and publish it as-is.';
+
   const handleGenerate = async () => {
     try {
       setProcessing(true);
@@ -164,53 +187,48 @@ export default function Create() {
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
           </svg>
-          AI-Powered
+          {aiEnabled ? 'AI-Powered' : 'Manual Mode'}
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold text-zinc-50 tracking-tight">
           Brain Dump
         </h1>
         <p className="text-zinc-500 mt-3 text-base sm:text-lg max-w-md mx-auto leading-relaxed">
-          {mode === 'voice' ? 'Record your thoughts. AI preserves your voice.' : 'Jot your ideas. AI expands them into a full post.'}
+          {heroDescription}
         </p>
       </div>
 
       {/* Mode toggle */}
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-        <div className="inline-flex rounded-full border border-zinc-800/60 bg-zinc-950/80 p-1 shadow-sm">
-          <button
-            onClick={() => setAiEnabled(true)}
-            className={`px-4 py-2 text-sm font-medium transition ${aiEnabled ? 'bg-brand-500 text-white shadow-sm' : 'text-zinc-400 hover:text-white'}`}
-          >
-            AI mode
-          </button>
-          <button
-            onClick={() => setAiEnabled(false)}
-            className={`px-4 py-2 text-sm font-medium transition ${!aiEnabled ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-400 hover:text-white'}`}
-          >
-            Classic mode
-          </button>
-        </div>
+        <button
+          onClick={() => handleAiToggle(!aiEnabled)}
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${aiEnabled ? 'border-brand-500/40 bg-brand-500/10 text-brand-300 shadow-sm' : 'border-zinc-800/60 bg-zinc-950/80 text-zinc-300 hover:text-white'}`}
+        >
+          <span className={`h-2.5 w-2.5 rounded-full ${aiEnabled ? 'bg-brand-400' : 'bg-zinc-600'}`} />
+          {aiEnabled ? 'AI On' : 'AI Off'}
+        </button>
 
-        <div className="tab-group">
-          <button
-            onClick={() => { setMode('voice'); }}
-            className={`flex items-center gap-2 ${mode === 'voice' ? 'tab-item-active' : 'tab-item'}`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-            </svg>
-            Voice
-          </button>
-          <button
-            onClick={() => { setMode('text'); }}
-            className={`flex items-center gap-2 ${mode === 'text' ? 'tab-item-active' : 'tab-item'}`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-            </svg>
-            Text
-          </button>
-        </div>
+        {aiEnabled && (
+          <div className="tab-group">
+            <button
+              onClick={() => { setMode('voice'); }}
+              className={`flex items-center gap-2 ${mode === 'voice' ? 'tab-item-active' : 'tab-item'}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+              Voice
+            </button>
+            <button
+              onClick={() => { setMode('text'); }}
+              className={`flex items-center gap-2 ${mode === 'text' ? 'tab-item-active' : 'tab-item'}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+              </svg>
+              Text
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Input area */}
@@ -363,13 +381,13 @@ export default function Create() {
       <div className="flex flex-col items-center gap-4">
         <button
           onClick={handleGenerate}
-          disabled={processing || (mode === 'voice' ? !audioBlob : !textInput.trim())}
+          disabled={isSubmitDisabled}
           className="btn-primary px-10 py-3.5 text-base flex items-center gap-2.5 group disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
           </svg>
-          {mode === 'voice' ? 'Transform Recording' : 'Generate Post'}
+          {submitLabel}
         </button>
 
         {/* Pipeline visualization — different per mode */}
