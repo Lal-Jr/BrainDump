@@ -38,8 +38,7 @@ export default function PublicFeed() {
           <div className="retro-panel mb-6 overflow-hidden p-6 sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
-                <p className="retro-pill mb-3">Recent posts</p>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-50 tracking-tight">Notes</h1>
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-50 tracking-tight">Brain Dump</h1>
                 <p className="mt-3 max-w-2xl text-sm sm:text-base text-zinc-500 leading-relaxed">
                   Short notes, longer pieces, and the occasional reflection.
                 </p>
@@ -59,42 +58,6 @@ export default function PublicFeed() {
               <p className="text-sm font-semibold text-zinc-100">Harish Lal</p>
               <p className="text-sm text-zinc-500">Writing notes and posts in a simple space.</p>
             </div>
-          </div>
-        </div>
-
-        <div className="mb-10 rounded-3xl border border-zinc-800/60 bg-surface-200/50 p-5 sm:p-6">
-          <p className="retro-pill mb-4">Favorites</p>
-          {favorites.length === 0 ? (
-            <p className="text-sm text-zinc-500">No favorites yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {posts.filter(post => favorites.includes(post.id)).map(post => (
-                <Link key={post.id} to={`/${post.slug}`} className="flex items-center justify-between rounded-2xl border border-zinc-800/50 bg-surface-200/60 px-3 py-3 transition hover:border-brand-500/30 hover:bg-surface-200">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{post.title}</p>
-                  </div>
-                  <span className="text-sm text-zinc-500">★</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-10 rounded-3xl border border-zinc-800/60 bg-surface-200/50 p-5 sm:p-6">
-          <p className="retro-pill mb-4">Timeline</p>
-          <div className="space-y-3">
-            {posts.slice(0, 5).map((post, i) => {
-              const date = new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              return (
-                <Link key={post.id} to={`/${post.slug}`} className="flex items-center justify-between rounded-2xl border border-zinc-800/50 bg-surface-200/60 px-3 py-3 transition hover:border-brand-500/30 hover:bg-surface-200">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-zinc-600">{date}</p>
-                    <p className="mt-1 text-sm font-medium text-zinc-200">{post.title}</p>
-                  </div>
-                  <span className="text-sm text-zinc-500">0{i + 1}</span>
-                </Link>
-              );
-            })}
           </div>
         </div>
 
