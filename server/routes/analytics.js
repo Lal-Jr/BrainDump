@@ -55,6 +55,24 @@ router.get('/', requireAuth, async (req, res) => {
       .sort((a, b) => b.views - a.views)
       .slice(0, 10);
 
+    // Views per post breakdown
+    const viewsPerPost = posts.map(p => ({
+      id: p.id,
+      title: p.title,
+      views: analytics.postViews[p.id] || 0,
+    }));
+
+    // Most commented posts
+    const commentCounts = posts.map(p => ({
+      id: p.id,
+      title: p.title,
+      comments: recentComments.filter(c => c.postId === p.id).length,
+    }));
+    const mostCommentedPosts = commentCounts.sort((a, b) => b.comments - a.comments).slice(0, 5);
+
+    // Average views per post
+    const avgViewsPerPost = posts.length > 0 ? (analytics.totalViews / posts.length) : 0;
+
     res.json({
       stats: {
         totalPosts,
@@ -64,10 +82,13 @@ router.get('/', requireAuth, async (req, res) => {
         todayViews: analytics.todayViews,
         weekViews: analytics.weekViews,
         totalComments,
+        avgViewsPerPost,
       },
       chart: analytics.chart,
       topPosts,
       recentComments: recentComments.slice(0, 10),
+      viewsPerPost,
+      mostCommentedPosts,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

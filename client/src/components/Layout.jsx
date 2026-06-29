@@ -1,27 +1,56 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
   const { pathname } = useLocation();
   const { logout } = useAuth();
+  const [progress, setProgress] = useState(0);
+  const [showTop, setShowTop] = useState(false);
 
-  // Register PWA service worker only inside admin routes
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/admin' }).catch(() => {});
     }
   }, []);
 
+  useEffect(() => {
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const next = max > 0 ? (window.scrollY / max) * 100 : 0;
+      setProgress(next);
+      setShowTop(window.scrollY > 700);
+    };
+
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-surface-50">
-      {/* Ambient background glow */}
+      <div className="fixed top-0 left-0 z-[60] h-1 w-full bg-zinc-950/70">
+        <div className="h-full rounded-r-full bg-gradient-to-r from-brand-400 via-cyan-400 to-fuchsia-500 transition-all duration-200" style={{ width: `${Math.min(progress, 100)}%` }} />
+      </div>
+
+      {showTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-50 rounded-full border border-zinc-800/60 bg-surface-200/90 p-3 text-zinc-300 shadow-lg shadow-black/20 backdrop-blur"
+          aria-label="Back to top"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19.5V4.5m0 0l-6 6m6-6l6 6" />
+          </svg>
+        </button>
+      )}
+
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-[40%] -left-[20%] w-[70%] h-[70%] bg-brand-600/[0.04] rounded-full blur-[120px]" />
         <div className="absolute -bottom-[30%] -right-[20%] w-[60%] h-[60%] bg-brand-500/[0.03] rounded-full blur-[100px]" />
       </div>
 
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/[0.04]">
         <div className="absolute inset-0 bg-surface-50/70 backdrop-blur-2xl" />
         <div className="relative max-w-5xl mx-auto px-5 h-16 flex items-center justify-between">
@@ -71,7 +100,6 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="relative flex-1 max-w-5xl w-full mx-auto px-5 py-8">
         <Outlet />
       </main>

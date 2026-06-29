@@ -50,8 +50,26 @@ router.get('/view/:slug', async (req, res) => {
   try {
     const post = await getPostBySlug(req.params.slug);
     if (!post) return res.status(404).json({ error: 'Post not found' });
-    // Track view asynchronously
-    recordView(post.id).catch(() => {});
+
+    // Exclude admin visits from view count
+    let isAdmin = false;
+    const header = req.headers.authorization;
+    if (header && header.startsWith('Bearer ')) {
+      const token = header.split(' ')[1];
+      try {
+        // Use same secret as requireAuth
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+        jwt.verify(token, JWT_SECRET);
+        isAdmin = true;
+      } catch {
+        // Invalid token, treat as public
+      }
+    }
+    if (!isAdmin) {
+      // Track view asynchronously for public only
+      recordView(post.id).catch(() => {});
+    }
     res.json(post);
   } catch (e) {
     res.status(500).json({ error: e.message });
