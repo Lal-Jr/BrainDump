@@ -20,6 +20,14 @@ draft; you edit it, add media, and publish.
 - Dashboard with views, comment counts, publishing and comment moderation
 - Installable as an app (voice notes from a phone)
 
+## Tech stack
+
+- **Client:** React 18, React Router 6, Vite 5, Tailwind CSS 3
+- **Server:** Node.js + Express 4 (helmet, compression, express-rate-limit, bcryptjs, jsonwebtoken, gray-matter)
+- **Storage:** plain files on disk (markdown posts + JSON), no database
+- **AI drafting:** OpenAI (optional)
+- **Hosting:** Docker on Fly.io
+
 ## Run it
 
 ```bash
@@ -29,6 +37,47 @@ npm run dev                            # API on :3001, client on :5173 (open /bl
 ```
 
 Production: `npm run build && npm start` (see the `Dockerfile` and `fly.toml`).
+
+### Environment variables (`server/.env`)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `JWT_SECRET` | production | 32+ random chars (`openssl rand -hex 32`); signs admin tokens |
+| `ADMIN_PASSWORD` | production | 8+ chars; the admin login |
+| `OPENAI_API_KEY` | no | Enables voice/text to draft; blank drafts work without it |
+| `PORT` | no | Server port (default `3001`) |
+| `DATA_DIR` | no | Where posts, uploads, comments and analytics live (a mounted volume in production) |
+| `SITE_URL` | no | Public origin used in RSS/sitemap links |
+| `TRUST_PROXY` | no | Number of reverse proxies in front (default `2`) |
+
+### Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run install:all` | Installs root, server and client dependencies |
+| `npm run dev` | API (`:3001`) and Vite client (`:5173`) together |
+| `npm run build` | Production client build |
+| `npm start` | Serves the API and the built client |
+
+## Deployment
+
+Pushes to `main` deploy automatically to Fly.io via `.github/workflows/fly-deploy.yml` (needs the
+`FLY_API_TOKEN` repository secret). `fly.toml` mounts a persistent volume at `/data`
+(`DATA_DIR`), health-checks `/healthz`, and stops idle machines to save cost. Set the secrets once with
+`fly secrets set JWT_SECRET=... ADMIN_PASSWORD=... OPENAI_API_KEY=...`.
+
+## API overview
+
+Public routes are read-only apart from comments, reactions and view hits; everything else needs the admin JWT.
+
+| Prefix | Purpose |
+| --- | --- |
+| `/api/auth` | `POST /login`, `GET /verify` |
+| `/api/posts` | List/read posts; admin create (`/from-voice`, `/from-text`, `/manual`), update, publish, delete; `rss.xml` and `sitemap.xml` are served from the feed router |
+| `/api/comments` | Threaded comments per post; admin delete |
+| `/api/reactions` | Read and add reactions |
+| `/api/analytics` | View hits (public), dashboard stats (admin) |
+| `/api/media` | Upload and serve images, video, PDFs |
 
 ## How it's built
 
