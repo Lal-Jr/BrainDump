@@ -108,8 +108,9 @@ export function updatePost(id, updates) {
 
     const next = { ...post, ...updates, updatedAt: new Date().toISOString() };
     let filename = post.filename;
-    // A published post's URL is permanent; only a draft's slug follows its title
-    if (updates.title && updates.title !== post.title && !post.published) {
+    // A published post's URL is permanent, except a placeholder "untitled" slug, which is never
+    // what the author meant to keep. Otherwise a draft's slug follows its title.
+    if (updates.title && (!post.published || /^untitled(-|$)/.test(post.slug))) {
       next.slug = await uniqueSlug(updates.title, post.filename);
       filename = `${next.slug}.md`;
     }

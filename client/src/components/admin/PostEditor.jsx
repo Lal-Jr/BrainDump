@@ -43,6 +43,7 @@ export default function PostEditor({ initial, onSave, saving }) {
   const textarea = useRef(null);
   const fileInput = useRef(null);
   const coverInput = useRef(null);
+  const imageInput = useRef(null);
   const saved = useRef(JSON.stringify(fields)); // what's on the server, to detect unsaved edits
 
   const set = (key) => (e) => setFields((f) => ({ ...f, [key]: e.target.value }));
@@ -223,7 +224,7 @@ export default function PostEditor({ initial, onSave, saving }) {
 
       {/* Cover image */}
       <div>
-        <span className="label mb-2 block">Cover image (optional, shown on the feed)</span>
+        <span className="label mb-2 block">Cover image (optional, shown above the post and on the feed)</span>
         <div className="flex flex-wrap items-center gap-4">
           {fields.cover ? (
             <img src={withBase(fields.cover.slice(1))} alt="Cover" className="h-20 w-36 border border-white/10 object-cover" />
@@ -260,6 +261,7 @@ export default function PostEditor({ initial, onSave, saving }) {
             <ToolButton onClick={() => wrap('[', '](https://)', 'link text')} label="Link" />
             <ToolButton onClick={() => wrap('> ', '', 'Quote')} label="Quote" />
             <ToolButton onClick={() => setVideoOpen((v) => !v)} label="Video link" title="Embed a YouTube or Vimeo video" />
+            <ToolButton onClick={() => imageInput.current?.click()} label="Image" title="Insert an image at the cursor" />
             <ToolButton onClick={() => fileInput.current?.click()} label="+ Media" primary />
           </div>
         )}
@@ -282,6 +284,7 @@ export default function PostEditor({ initial, onSave, saving }) {
           {videoErr && <p role="alert" className="text-[12px] text-red-300">{videoErr}</p>}
         </form>
       )}
+      <input ref={imageInput} type="file" accept="image/*" multiple hidden onChange={(e) => (uploadFiles(e.target.files), (e.target.value = ''))} />
       <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => (uploadFiles(e.target.files), (e.target.value = ''))} />
 
       {/* Body */}

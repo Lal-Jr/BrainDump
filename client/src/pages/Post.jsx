@@ -3,6 +3,7 @@ import { fetchPostBySlug, fetchPublishedPosts, recordHit } from '../lib/api';
 import { categoryOf } from '../lib/categories';
 import { formatDate, readingLabel, plural } from '../lib/format';
 import { renderMarkdown } from '../lib/markdown';
+import { withBase } from '../base';
 import { useSWR } from '../hooks/useSWR';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { useAuth } from '../context/AuthContext';
@@ -101,6 +102,10 @@ export default function Post({ slug }) {
             )}
           </p>
         </header>
+
+        {post.cover && (
+          <img src={withBase(post.cover.slice(1))} alt="" decoding="async" className="mt-8 w-full border border-white/10 object-cover" />
+        )}
 
         {headings.length >= 3 && (
           <details className="group mt-6 border border-white/10 px-4 py-3">

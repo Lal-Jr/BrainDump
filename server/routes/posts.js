@@ -7,7 +7,7 @@ import { recordView } from '../services/analytics.js';
 import { saveUpload } from '../services/media.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { limits } from '../middleware/security.js';
-import { uuidParam, isSlug, cleanText, cleanTags, pickPostUpdate } from '../middleware/validate.js';
+import { uuidParam, isSlug, cleanText, cleanTags, cleanCover, pickPostUpdate } from '../middleware/validate.js';
 import { LIMITS } from '../config.js';
 
 const router = Router();
@@ -24,18 +24,19 @@ const fromAI = (data, content) => ({
   content: cleanText(content, LIMITS.contentChars, { multiline: true }),
 });
 
-// If the model asked for an image, generate it, run it through the same upload pipeline, and prepend it
-async function withCover(blogData) {
-  if (!blogData.needsImage || !blogData.imagePrompt) return blogData.content;
+// If the model asked for an image, generate it and run it through the same upload pipeline.
+// It becomes the post's cover, which renders above the body, rather than a line inside it.
+async function generateCover(blogData) {
+  if (!blogData.needsImage || !blogData.imagePrompt) return '';
   try {
     const imageUrl = await generateImage(blogData.imagePrompt);
-    if (!imageUrl) return blogData.content;
+    if (!imageUrl) return '';
     const buffer = Buffer.from(await (await fetch(imageUrl)).arrayBuffer());
     const { url } = await saveUpload(buffer);
-    return `![Cover](${url})\n\n${blogData.content}`;
+    return url;
   } catch (e) {
     console.warn('Image generation failed (non-critical):', e.message);
-    return blogData.content;
+    return '';
   }
 }
 
@@ -123,7 +124,7 @@ router.post('/from-voice', requireAuth, limits.ai, audioUpload.single('audio'), 
       return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
     }
 
-    const post = await createPost({ ...fromAI(blogData, await withCover(blogData)), published: false });
+    const post = await createPost({ ...fromAI(blogData, blogData.content), cover: cleanCover(await generateCover(blogData)), published: false });
     res.json({ post, transcript });
   } catch (e) {
     console.error('Voice post creation failed:', e);
@@ -147,7 +148,7 @@ router.post('/from-text', requireAuth, limits.ai, async (req, res) => {
       return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
     }
 
-    const post = await createPost({ ...fromAI(blogData, await withCover(blogData)), published: false });
+    const post = await createPost({ ...fromAI(blogData, blogData.content), cover: cleanCover(await generateCover(blogData)), published: false });
     res.json({ post });
   } catch (e) {
     console.error('Text post creation failed:', e);
