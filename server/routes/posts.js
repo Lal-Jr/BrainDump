@@ -1,317 +1,196 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { transcribeAudio, generateFromVoice, generateFromText, generateImage } from '../services/ai.js';
-import {
-  createPost,
-  getAllPosts,
-  getPostBySlug,
-  getPostById,
-  updatePost,
-  deletePost,
-  togglePublish,
-  saveImage,
-  getRawMarkdown,
-  saveRawMarkdown,
-} from '../services/markdown.js';
-import { requireAuth } from '../middleware/auth.js';
+import { createPost, getAllPosts, getPostBySlug, getPostById, updatePost, deletePost, togglePublish, toListItem } from '../services/postStore.js';
+import { getCommentCounts } from '../services/comments.js';
 import { recordView } from '../services/analytics.js';
+import { saveUpload } from '../services/media.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { limits } from '../middleware/security.js';
+import { uuidParam, isSlug, cleanText, cleanTags, pickPostUpdate } from '../middleware/validate.js';
+import { LIMITS } from '../config.js';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1, fields: 2 } });
 
-// Helper: detect OpenAI quota/billing errors
-function isQuotaError(e) {
-  const msg = (e?.message || '') + (e?.error?.code || '') + (e?.code || '') + (e?.type || '');
-  return msg.includes('insufficient_quota') || msg.includes('billing') || msg.includes('exceeded your current quota');
-}
-function quotaMsg() {
-  return 'OpenAI API credits exhausted. Add credits at platform.openai.com/settings/organization/billing';
-}
+const isQuotaError = (e) => /insufficient_quota|billing|exceeded your current quota/.test(`${e?.message ?? ''}${e?.error?.code ?? ''}${e?.code ?? ''}${e?.type ?? ''}`);
+const QUOTA_MSG = 'OpenAI API credits exhausted. Add credits at platform.openai.com/settings/organization/billing';
 
-// GET /api/posts — list all posts (published=true is public, all posts requires auth)
-router.get('/', async (req, res) => {
+// Whatever the model returns is untrusted input: bound and clean it like anything else
+const fromAI = (data, content) => ({
+  title: cleanText(data.title, LIMITS.title) || 'Untitled draft',
+  summary: cleanText(data.summary, LIMITS.summary),
+  tags: cleanTags(data.tags),
+  content: cleanText(content, LIMITS.contentChars, { multiline: true }),
+});
+
+// If the model asked for an image, generate it, run it through the same upload pipeline, and prepend it
+async function withCover(blogData) {
+  if (!blogData.needsImage || !blogData.imagePrompt) return blogData.content;
   try {
-    const posts = await getAllPosts();
-    // Public: only published posts
-    if (req.query.published === 'true') {
-      return res.json(posts.filter(p => p.published));
-    }
-    // All posts requires auth
-    requireAuth(req, res, () => {
-      res.json(posts);
-    });
+    const imageUrl = await generateImage(blogData.imagePrompt);
+    if (!imageUrl) return blogData.content;
+    const buffer = Buffer.from(await (await fetch(imageUrl)).arrayBuffer());
+    const { url } = await saveUpload(buffer);
+    return `![Cover](${url})\n\n${blogData.content}`;
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.warn('Image generation failed (non-critical):', e.message);
+    return blogData.content;
+  }
+}
+
+// GET /api/posts?published=true (public, cacheable) or /api/posts (admin): summaries only, no body
+router.get('/', optionalAuth, async (req, res, next) => {
+  try {
+    const publicOnly = req.query.published === 'true';
+    if (!publicOnly && !req.user) return res.status(401).json({ error: 'Authentication required' });
+    const [posts, counts] = await Promise.all([getAllPosts(), getCommentCounts()]);
+    const items = (publicOnly ? posts.filter((p) => p.published) : posts).map((p) => ({ ...toListItem(p), commentCount: counts.get(p.id) ?? 0 }));
+    res.set('Cache-Control', publicOnly ? 'public, max-age=30, stale-while-revalidate=300' : 'private, no-store');
+    res.set('Vary', 'Authorization');
+    res.json(items);
+  } catch (e) {
+    next(e);
   }
 });
 
-// GET /api/posts/:slug — get single post by slug (public, tracks views)
-router.get('/view/:slug', async (req, res) => {
+// GET /api/posts/view/:slug: a published post (drafts only for the signed-in admin). Read-only and
+// cacheable; views are counted separately by POST /hit/:id.
+router.get('/view/:slug', optionalAuth, async (req, res, next) => {
   try {
+    if (!isSlug(req.params.slug)) return res.status(404).json({ error: 'Post not found' });
     const post = await getPostBySlug(req.params.slug);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
-
-    // Exclude admin visits from view count
-    let isAdmin = false;
-    const header = req.headers.authorization;
-    if (header && header.startsWith('Bearer ')) {
-      const token = header.split(' ')[1];
-      try {
-        // Use same secret as requireAuth
-        const jwt = await import('jsonwebtoken');
-        const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-        jwt.verify(token, JWT_SECRET);
-        isAdmin = true;
-      } catch {
-        // Invalid token, treat as public
-      }
-    }
-    if (!isAdmin) {
-      // Track view asynchronously for public only
-      recordView(post.id).catch(() => {});
-    }
-    res.json(post);
+    if (!post || (!post.published && !req.user)) return res.status(404).json({ error: 'Post not found' });
+    const counts = await getCommentCounts();
+    res.set('Cache-Control', post.published ? 'public, max-age=60, stale-while-revalidate=600' : 'private, no-store');
+    res.set('Vary', 'Authorization');
+    const { filename, ...rest } = post;
+    res.json({ ...rest, commentCount: counts.get(post.id) ?? 0 });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
-// GET /api/posts/:id — get single post by id (admin only)
-router.get('/:id', requireAuth, async (req, res) => {
+// POST /api/posts/hit/:id: count one view (skips the admin, only published posts)
+router.post('/hit/:id', uuidParam('id'), limits.hit, optionalAuth, async (req, res, next) => {
+  try {
+    if (!req.user) {
+      const post = await getPostById(req.params.id);
+      if (post?.published) await recordView(post.id);
+    }
+    res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/posts/:id (admin)
+router.get('/:id', requireAuth, uuidParam('id'), async (req, res, next) => {
   try {
     const post = await getPostById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
+    res.set('Cache-Control', 'no-store');
     res.json(post);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
-// GET /api/posts/:id/raw — get raw markdown (admin only)
-router.get('/:id/raw', requireAuth, async (req, res) => {
-  try {
-    const raw = await getRawMarkdown(req.params.id);
-    res.json({ raw });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /api/posts/from-voice — create post from voice recording (admin only)
-router.post('/from-voice', requireAuth, upload.single('audio'), async (req, res) => {
+// POST /api/posts/from-voice: transcribe a recording and draft a post from it (admin)
+router.post('/from-voice', requireAuth, limits.ai, audioUpload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
 
-    // 1. Transcribe audio
     let transcript;
     try {
       transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
     } catch (e) {
-      console.error('Transcription failed:', e);
-      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
-      return res.status(502).json({ error: 'Transcription failed — could not process audio. Try again or check your recording.', stage: 'transcription' });
+      console.error('Transcription failed:', e.message);
+      if (isQuotaError(e)) return res.status(402).json({ error: QUOTA_MSG, stage: 'quota' });
+      return res.status(502).json({ error: 'Transcription failed. Try again or check your recording.', stage: 'transcription' });
+    }
+    if (!transcript?.trim()) {
+      return res.status(400).json({ error: 'No speech detected in the recording. Try speaking louder or somewhere quieter.', stage: 'transcription' });
     }
 
-    if (!transcript || !transcript.trim()) {
-      return res.status(400).json({ error: 'No speech detected in recording. Try speaking louder or recording in a quieter environment.', stage: 'transcription' });
-    }
-
-    // 2. Generate blog post from transcript (voice-specific prompt)
     let blogData;
     try {
       blogData = await generateFromVoice(transcript);
     } catch (e) {
-      console.error('Voice post generation failed:', e);
-      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
+      console.error('Voice post generation failed:', e.message);
+      if (isQuotaError(e)) return res.status(402).json({ error: QUOTA_MSG, stage: 'quota' });
       return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
     }
 
-    // 3. Generate image only if AI explicitly says the content needs one (rare)
-    let content = blogData.content;
-    if (blogData.needsImage && blogData.imagePrompt) {
-      try {
-        const imageUrl = await generateImage(blogData.imagePrompt);
-        if (imageUrl) {
-          const response = await fetch(imageUrl);
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const localUrl = await saveImage(buffer, 'generated.png');
-          content = `![Cover](${localUrl})\n\n${content}`;
-        }
-      } catch (e) {
-        console.warn('Image generation failed (non-critical):', e.message);
-      }
-    }
-
-    // 4. Save as markdown
-    const post = await createPost({
-      title: blogData.title,
-      summary: blogData.summary,
-      content,
-      tags: blogData.tags,
-      published: false,
-    });
-
+    const post = await createPost({ ...fromAI(blogData, await withCover(blogData)), published: false });
     res.json({ post, transcript });
   } catch (e) {
     console.error('Voice post creation failed:', e);
-    if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
-    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
+    if (isQuotaError(e)) return res.status(402).json({ error: QUOTA_MSG, stage: 'quota' });
+    res.status(500).json({ error: 'Something went wrong creating the post.', stage: 'unknown' });
   }
 });
 
-// POST /api/posts/from-voice-manual — transcribe audio and save as manual post (admin only)
-router.post('/from-voice-manual', requireAuth, upload.single('audio'), async (req, res) => {
+// POST /api/posts/from-text: draft a post from rough notes (admin)
+router.post('/from-text', requireAuth, limits.ai, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
-
-    // Transcribe audio
-    let transcript;
-    try {
-      transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
-    } catch (e) {
-      console.error('Transcription failed:', e);
-      if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
-      return res.status(502).json({ error: 'Transcription failed — could not process audio. Try again or check your recording.', stage: 'transcription' });
-    }
-
-    if (!transcript || !transcript.trim()) {
-      return res.status(400).json({ error: 'No speech detected in recording. Try speaking louder or recording in a quieter environment.', stage: 'transcription' });
-    }
-
-    const title = (req.body.title || '').trim();
-    const summary = (req.body.summary || '').trim();
-    let tags = [];
-    if (req.body.tags) {
-      try { tags = JSON.parse(req.body.tags); } catch (_) {
-        // fallback: comma-separated string
-        tags = String(req.body.tags).split(',').map(t => t.trim()).filter(Boolean);
-      }
-    }
-
-    if (!title) return res.status(400).json({ error: 'Title is required for manual voice posts.' });
-
-    const post = await createPost({
-      title,
-      summary,
-      content: transcript,
-      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
-      published: false,
-    });
-
-    res.json({ post, transcript });
-  } catch (e) {
-    console.error('Manual voice post creation failed:', e);
-    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
-  }
-});
-
-// POST /api/posts/from-text — create post from text input (admin only)
-router.post('/from-text', requireAuth, async (req, res) => {
-  try {
-    const { text, style, tone } = req.body;
-    if (!text) return res.status(400).json({ error: 'No text provided' });
-    if (text.trim().length < 10) return res.status(400).json({ error: 'Please write at least a few words to generate a post from.' });
+    const text = cleanText(req.body?.text, 20_000, { multiline: true });
+    if (text.length < 10) return res.status(400).json({ error: 'Write at least a few words to generate a post from.' });
 
     let blogData;
     try {
-      blogData = await generateFromText(text, { style, tone });
+      blogData = await generateFromText(text, { style: req.body?.style, tone: req.body?.tone });
     } catch (e) {
-      console.error('Text post generation failed:', e);
+      console.error('Text post generation failed:', e.message);
+      if (isQuotaError(e)) return res.status(402).json({ error: QUOTA_MSG, stage: 'quota' });
       return res.status(502).json({ error: 'AI post generation failed. Please try again.', stage: 'generation' });
     }
 
-    let content = blogData.content;
-
-    // Generate image only if AI explicitly says the content needs one (rare)
-    if (blogData.needsImage && blogData.imagePrompt) {
-      try {
-        const imageUrl = await generateImage(blogData.imagePrompt);
-        if (imageUrl) {
-          const response = await fetch(imageUrl);
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const localUrl = await saveImage(buffer, 'generated.png');
-          content = `![Cover](${localUrl})\n\n${content}`;
-        }
-      } catch (e) {
-        console.warn('Image generation failed (non-critical):', e.message);
-      }
-    }
-
-    const post = await createPost({
-      title: blogData.title,
-      summary: blogData.summary,
-      content,
-      tags: blogData.tags,
-      published: false,
-    });
-
+    const post = await createPost({ ...fromAI(blogData, await withCover(blogData)), published: false });
     res.json({ post });
   } catch (e) {
     console.error('Text post creation failed:', e);
-    if (isQuotaError(e)) return res.status(402).json({ error: quotaMsg(), stage: 'quota' });
-    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
+    if (isQuotaError(e)) return res.status(402).json({ error: QUOTA_MSG, stage: 'quota' });
+    res.status(500).json({ error: 'Something went wrong creating the post.', stage: 'unknown' });
   }
 });
 
-// POST /api/posts/manual — create post without AI generation (admin only)
-router.post('/manual', requireAuth, async (req, res) => {
+// POST /api/posts/manual: a draft without AI (a blank draft to write by hand) (admin)
+router.post('/manual', requireAuth, async (req, res, next) => {
   try {
-    const { title, summary = '', content, tags = [] } = req.body;
-    if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required for manual posts.' });
-    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required for manual posts.' });
-
-    const post = await createPost({
-      title: title.trim(),
-      summary: summary.trim(),
-      content,
-      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
-      published: false,
-    });
-
-    res.json({ post });
+    const fields = pickPostUpdate(req.body);
+    if (!fields.title) return res.status(400).json({ error: 'Title is required.' });
+    res.json({ post: await createPost({ ...fields, published: false }) });
   } catch (e) {
-    console.error('Manual post creation failed:', e);
-    res.status(500).json({ error: e.message || 'An unexpected error occurred', stage: 'unknown' });
+    next(e);
   }
 });
 
-// PUT /api/posts/:id — update post (admin only)
-router.put('/:id', requireAuth, async (req, res) => {
+// PUT /api/posts/:id: only whitelisted fields can change (id, slug, dates and published are the server's)
+router.put('/:id', requireAuth, uuidParam('id'), async (req, res, next) => {
   try {
-    const updated = await updatePost(req.params.id, req.body);
-    res.json(updated);
+    const fields = pickPostUpdate(req.body);
+    if ('title' in fields && !fields.title) return res.status(400).json({ error: 'Title is required.' });
+    res.json(await updatePost(req.params.id, fields));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
-// PUT /api/posts/:id/raw — save raw markdown (admin only)
-router.put('/:id/raw', requireAuth, async (req, res) => {
+router.post('/:id/publish', requireAuth, uuidParam('id'), async (req, res, next) => {
   try {
-    const updated = await saveRawMarkdown(req.params.id, req.body.raw);
-    res.json(updated);
+    res.json(await togglePublish(req.params.id));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
-// POST /api/posts/:id/publish — toggle publish (admin only)
-router.post('/:id/publish', requireAuth, async (req, res) => {
-  try {
-    const updated = await togglePublish(req.params.id);
-    res.json(updated);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// DELETE /api/posts/:id — delete post (admin only)
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, uuidParam('id'), async (req, res, next) => {
   try {
     await deletePost(req.params.id);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

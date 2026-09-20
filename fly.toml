@@ -33,7 +33,7 @@ primary_region = 'sjc'
   timeout = "5s"
   grace_period = "10s"
   method = "GET"
-  path = "/api/posts?published=true"
+  path = "/healthz"
 
 [[vm]]
   memory = '1gb'

@@ -1,44 +1,54 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import Layout from './components/Layout';
-import Home from './pages/Home';
-import Create from './pages/Create';
-import Edit from './pages/Edit';
-import View from './pages/View';
-import PublicFeed from './pages/PublicFeed';
-import Login from './pages/Login';
-import LoadingSpinner from './components/LoadingSpinner';
+import ErrorBoundary from './components/ui/ErrorBoundary';
+import LoadingSpinner from './components/ui/LoadingSpinner';
+import PublicLayout from './components/public/PublicLayout';
+import Feed from './pages/Feed';
+import { loadPost } from './lib/routes';
 
-function ProtectedRoute({ children }) {
+// Split points: the feed is the lightest possible first load (no markdown/highlighting code),
+// the post page loads on demand (and is warmed on link hover), admin never loads for readers.
+const Post = lazy(loadPost);
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+const Create = lazy(() => import('./pages/admin/Create'));
+const Edit = lazy(() => import('./pages/admin/Edit'));
+const Login = lazy(() => import('./pages/admin/Login'));
+
+// key on the slug so a different post always mounts fresh (never shows the previous post's data)
+function PostRoute() {
+  const { slug } = useParams();
+  return <Post key={slug} slug={slug} />;
+}
+
+function RequireAuth({ children }) {
   const { authenticated, loading } = useAuth();
-  if (loading) return <LoadingSpinner text="Checking auth..." />;
-  if (!authenticated) return <Navigate to="/admin/login" replace />;
-  return children;
+  if (loading) return <LoadingSpinner text="Checking session" />;
+  return authenticated ? children : <Navigate to="/admin/login" replace />;
 }
 
 export default function App() {
   return (
     <ToastProvider>
-    <ErrorBoundary>
-      <Routes>
-        {/* Public blog routes — default */}
-        <Route path="/" element={<ErrorBoundary><PublicFeed /></ErrorBoundary>} />
-        <Route path="/:slug" element={<ErrorBoundary><View /></ErrorBoundary>} />
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner text="Loading" />}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<ErrorBoundary><Feed /></ErrorBoundary>} />
+              <Route path="/:slug" element={<ErrorBoundary><PostRoute /></ErrorBoundary>} />
+            </Route>
 
-        {/* Admin login */}
-        <Route path="/admin/login" element={<Login />} />
-
-        {/* Admin / personal routes (protected) */}
-        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route path="/admin" element={<ErrorBoundary><Home /></ErrorBoundary>} />
-          <Route path="/admin/create" element={<ErrorBoundary><Create /></ErrorBoundary>} />
-          <Route path="/admin/edit/:id" element={<ErrorBoundary><Edit /></ErrorBoundary>} />
-          <Route path="/admin/preview/:id" element={<ErrorBoundary><View /></ErrorBoundary>} />
-        </Route>
-      </Routes>
-    </ErrorBoundary>
+            <Route path="/admin/login" element={<Login />} />
+            <Route element={<RequireAuth><AdminLayout /></RequireAuth>}>
+              <Route path="/admin" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+              <Route path="/admin/create" element={<ErrorBoundary><Create /></ErrorBoundary>} />
+              <Route path="/admin/edit/:id" element={<ErrorBoundary><Edit /></ErrorBoundary>} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </ToastProvider>
   );
 }

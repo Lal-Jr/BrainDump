@@ -1,67 +1,68 @@
+// Comments: one JSON file per post. Threads are one level deep (a reply targets a top-level
+// comment). Counts are kept in memory so the feed can show them without opening every file.
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import { COMMENTS_DIR } from '../config.js';
+import { withLock } from './lock.js';
+import { writeFileAtomic, readJson } from './fsutil.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const MAX_PER_POST = 500;
+let counts = null; // Map<postId, number>
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
-const COMMENTS_DIR = path.join(DATA_DIR, 'comments');
+const fileFor = (postId) => path.join(COMMENTS_DIR, `${postId}.json`); // postId is validated as a UUID upstream
 
-async function ensureDir() {
+async function loadCounts() {
   await fs.mkdir(COMMENTS_DIR, { recursive: true });
-}
-
-function getFilePath(postId) {
-  return path.join(COMMENTS_DIR, `${postId}.json`);
-}
-
-async function readComments(postId) {
-  await ensureDir();
-  const filePath = getFilePath(postId);
-  try {
-    const data = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
+  const map = new Map();
+  for (const f of await fs.readdir(COMMENTS_DIR)) {
+    if (!f.endsWith('.json')) continue;
+    const list = await readJson(path.join(COMMENTS_DIR, f), []);
+    if (Array.isArray(list)) map.set(f.slice(0, -5), list.length);
   }
+  return map;
 }
 
-async function writeComments(postId, comments) {
-  await ensureDir();
-  await fs.writeFile(getFilePath(postId), JSON.stringify(comments, null, 2));
+export async function getCommentCounts() {
+  counts ??= await loadCounts();
+  return counts;
 }
 
-/**
- * Get all comments for a post
- */
 export async function getComments(postId) {
-  return readComments(postId);
+  await fs.mkdir(COMMENTS_DIR, { recursive: true });
+  const list = await readJson(fileFor(postId), []);
+  return Array.isArray(list) ? list : [];
 }
 
-/**
- * Add a comment to a post
- */
-export async function addComment(postId, { name, text }) {
-  const comments = await readComments(postId);
-  const comment = {
-    id: uuidv4(),
-    name: name?.trim() || 'Anonymous',
-    text: text.trim(),
-    createdAt: new Date().toISOString(),
-  };
-  comments.push(comment);
-  await writeComments(postId, comments);
-  return comment;
+export function addComment(postId, { name, text, parentId }) {
+  return withLock(`comments:${postId}`, async () => {
+    const list = await getComments(postId);
+    if (list.length >= MAX_PER_POST) throw Object.assign(new Error('This thread is full'), { status: 429 });
+    if (parentId) {
+      const parent = list.find((c) => c.id === parentId);
+      if (!parent || parent.parentId) throw Object.assign(new Error('Reply target not found'), { status: 400 });
+    }
+    const comment = {
+      id: uuidv4(),
+      ...(parentId ? { parentId } : {}),
+      name: name || 'Anonymous',
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    list.push(comment);
+    await writeFileAtomic(fileFor(postId), JSON.stringify(list, null, 2));
+    (await getCommentCounts()).set(postId, list.length);
+    return comment;
+  });
 }
 
-/**
- * Delete a comment (admin only)
- */
-export async function deleteComment(postId, commentId) {
-  const comments = await readComments(postId);
-  const filtered = comments.filter(c => c.id !== commentId);
-  await writeComments(postId, filtered);
-  return filtered;
+// Deleting a comment also deletes its replies
+export function deleteComment(postId, commentId) {
+  return withLock(`comments:${postId}`, async () => {
+    const list = await getComments(postId);
+    const remaining = list.filter((c) => c.id !== commentId && c.parentId !== commentId);
+    await writeFileAtomic(fileFor(postId), JSON.stringify(remaining, null, 2));
+    (await getCommentCounts()).set(postId, remaining.length);
+    return remaining;
+  });
 }

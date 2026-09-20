@@ -1,50 +1,36 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { ADMIN_PASSWORD } from '../config.js';
+import { limits } from '../middleware/security.js';
+import { signToken, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+// Hash once at boot, then compare with bcrypt on every attempt (constant-time)
+const passwordHash = ADMIN_PASSWORD ? bcrypt.hashSync(ADMIN_PASSWORD, 12) : null;
+// Compared against when the password is wrong-shaped, so response time doesn't leak anything
+const decoyHash = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// On first startup, hash the admin password from .env
-let hashedPassword = null;
-async function getHashedPassword() {
-  if (!hashedPassword) {
-    const raw = process.env.ADMIN_PASSWORD || 'admin';
-    hashedPassword = await bcrypt.hash(raw, 10);
-  }
-  return hashedPassword;
-}
-
-// POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', limits.login, async (req, res, next) => {
   try {
-    const { password } = req.body;
-    if (!password) return res.status(400).json({ error: 'Password required' });
-
-    const hash = await getHashedPassword();
-    const valid = await bcrypt.compare(password, hash);
-    if (!valid) return res.status(401).json({ error: 'Wrong password' });
-
-    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token });
+    if (!passwordHash) return res.status(503).json({ error: 'Admin login is not configured' });
+    const { password } = req.body ?? {};
+    const ok = await bcrypt.compare(typeof password === 'string' ? password.slice(0, 200) : '', typeof password === 'string' ? passwordHash : decoyHash);
+    if (!ok) {
+      await sleep(400); // slows guessing on top of the rate limit
+      return res.status(401).json({ error: 'Wrong password' });
+    }
+    res.json({ token: signToken() });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
-// GET /api/auth/verify — check if token is still valid
-router.get('/verify', (req, res) => {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ valid: false });
-  }
-  try {
-    jwt.verify(header.split(' ')[1], JWT_SECRET);
-    res.json({ valid: true });
-  } catch {
-    res.status(401).json({ valid: false });
-  }
+router.get('/verify', optionalAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.status(req.user ? 200 : 401).json({ valid: !!req.user });
 });
 
 export default router;

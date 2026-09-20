@@ -1,64 +1,49 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { login as apiLogin, verifyToken, getToken, setToken } from '../lib/api';
 
 const AuthContext = createContext(null);
+export const useAuth = () => useContext(AuthContext);
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
+// Only visitors who already have a token trigger a verify request; readers never do.
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('bd_token'));
-  const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [status, setStatus] = useState(() => (getToken() ? 'checking' : 'anon')); // anon | checking | authed
 
   useEffect(() => {
-    if (token) {
-      // Verify token is still valid
-      fetch('/api/auth/verify', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.valid) {
-            setAuthenticated(true);
-          } else {
-            localStorage.removeItem('bd_token');
-            setToken(null);
-            setAuthenticated(false);
-          }
-        })
-        .catch(() => {
-          setAuthenticated(false);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+    if (status !== 'checking') return undefined;
+    let cancelled = false;
+    verifyToken()
+      .then(() => !cancelled && setStatus('authed'))
+      .catch(() => {
+        if (cancelled) return;
+        setToken(null);
+        setStatus('anon');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
-  async function login(password) {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
-    localStorage.setItem('bd_token', data.token);
-    setToken(data.token);
-    setAuthenticated(true);
-    return data;
-  }
+  // Any admin request that comes back 401 (expired token) signs you out
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setToken(null);
+      setStatus('anon');
+    };
+    window.addEventListener('bd:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('bd:unauthorized', onUnauthorized);
+  }, []);
 
-  function logout() {
-    localStorage.removeItem('bd_token');
+  const login = useCallback(async (password) => {
+    const { token } = await apiLogin(password);
+    setToken(token);
+    setStatus('authed');
+  }, []);
+
+  const logout = useCallback(() => {
     setToken(null);
-    setAuthenticated(false);
-  }
+    setStatus('anon');
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ token, authenticated, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = useMemo(() => ({ authenticated: status === 'authed', loading: status === 'checking', login, logout }), [status, login, logout]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
