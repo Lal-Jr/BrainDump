@@ -56,7 +56,7 @@ export default function Post({ slug }) {
 
   if (error) {
     return (
-      <Empty title="This page wandered off" body="That post doesn't exist, or it isn't published yet.">
+      <Empty title="Post not found" body="That post doesn't exist, or it isn't published yet.">
         <SmoothLink to="/" className="btn-secondary mt-6">
           Back to all posts
         </SmoothLink>

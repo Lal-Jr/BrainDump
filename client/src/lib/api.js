@@ -38,7 +38,8 @@ async function request(path, { method = 'GET', body, form, auth = false, signal 
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
-  const res = await fetch(`${API}${path}`, { method, headers, body: payload, signal });
+  // reads always revalidate with the server (a cheap 304 when nothing changed), so a deleted post never lingers in the browser's HTTP cache
+  const res = await fetch(`${API}${path}`, { method, headers, body: payload, signal, cache: method === 'GET' ? 'no-cache' : undefined });
   const text = await res.text();
   let data = null;
   try {
@@ -105,7 +106,13 @@ export function invalidate(prefix = '') {
 // ---------- public reads ----------
 
 export const fetchPublishedPosts = () => load('posts', () => request('/posts?published=true'));
-export const fetchPostBySlug = (slug) => load(`post:${slug}`, () => request(`/posts/view/${encodeURIComponent(slug)}`, { auth: !!getToken() }));
+export const fetchPostBySlug = (slug) =>
+  load(`post:${slug}`, () =>
+    request(`/posts/view/${encodeURIComponent(slug)}`, { auth: !!getToken() }).catch((err) => {
+      if (err.status === 404) invalidate('posts'); // the list still shows it, so it is out of date
+      throw err;
+    })
+  );
 export const prefetchPost = (slug) => fetchPostBySlug(slug).catch(() => {});
 export const recordHit = (id) => request(`/posts/hit/${id}`, { method: 'POST', auth: !!getToken() }).catch(() => {});
 

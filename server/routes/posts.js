@@ -39,14 +39,15 @@ async function withCover(blogData) {
   }
 }
 
-// GET /api/posts?published=true (public, cacheable) or /api/posts (admin): summaries only, no body
+// GET /api/posts?published=true (public; `no-cache` = always revalidate via ETag, so a deleted or unpublished
+// post disappears at once while unchanged lists still cost only a 304) or /api/posts (admin): summaries only, no body
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const publicOnly = req.query.published === 'true';
     if (!publicOnly && !req.user) return res.status(401).json({ error: 'Authentication required' });
     const [posts, counts] = await Promise.all([getAllPosts(), getCommentCounts()]);
     const items = (publicOnly ? posts.filter((p) => p.published) : posts).map((p) => ({ ...toListItem(p), commentCount: counts.get(p.id) ?? 0 }));
-    res.set('Cache-Control', publicOnly ? 'public, max-age=30, stale-while-revalidate=300' : 'private, no-store');
+    res.set('Cache-Control', publicOnly ? 'public, no-cache' : 'private, no-store');
     res.set('Vary', 'Authorization');
     res.json(items);
   } catch (e) {
@@ -62,7 +63,7 @@ router.get('/view/:slug', optionalAuth, async (req, res, next) => {
     const post = await getPostBySlug(req.params.slug);
     if (!post || (!post.published && !req.user)) return res.status(404).json({ error: 'Post not found' });
     const counts = await getCommentCounts();
-    res.set('Cache-Control', post.published ? 'public, max-age=60, stale-while-revalidate=600' : 'private, no-store');
+    res.set('Cache-Control', post.published ? 'public, no-cache' : 'private, no-store');
     res.set('Vary', 'Authorization');
     const { filename, ...rest } = post;
     res.json({ ...rest, commentCount: counts.get(post.id) ?? 0 });
