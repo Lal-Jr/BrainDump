@@ -5,6 +5,7 @@ import { downscaleImage } from '../../lib/image';
 import { withBase } from '../../base';
 import { useToast } from '../../context/ToastContext';
 import MarkdownContent from '../public/MarkdownContent';
+import { parseVideoUrl } from '../../lib/markdown';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,application/pdf';
 // Mirrors the server's limits, so a too-big file is refused straight away instead of after a long upload
@@ -34,6 +35,9 @@ export default function PostEditor({ initial, onSave, saving }) {
     content: initial.content ?? '',
   }));
   const [preview, setPreview] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoErr, setVideoErr] = useState('');
   const [uploads, setUploads] = useState({}); // id -> { name, progress }
   const [dragging, setDragging] = useState(false);
   const textarea = useRef(null);
@@ -161,11 +165,31 @@ export default function PostEditor({ initial, onSave, saving }) {
     setDragging(false);
     if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files);
   };
+  // A YouTube / Vimeo link goes in as a video embed
+  const addVideo = (url) => {
+    if (!parseVideoUrl(url)) return false;
+    insertAtCursor(`\n\n{{video:${url.trim()}}}\n\n`);
+    return true;
+  };
+
+  const submitVideo = (e) => {
+    e.preventDefault();
+    if (!addVideo(videoUrl)) return setVideoErr('That is not a YouTube or Vimeo link. Try the address from your browser bar or the Share button.');
+    setVideoUrl('');
+    setVideoErr('');
+    setVideoOpen(false);
+  };
+
   const onPaste = (e) => {
     if (e.clipboardData?.files?.length) {
       e.preventDefault();
       uploadFiles(e.clipboardData.files);
+      return;
     }
+    // pasting a bare YouTube / Vimeo link embeds it (paste it over selected text to keep it as a plain link)
+    const text = e.clipboardData?.getData('text')?.trim();
+    const el = textarea.current;
+    if (text && !/\s/.test(text) && el && el.selectionStart === el.selectionEnd && addVideo(text)) e.preventDefault();
   };
 
   const words = useMemo(() => fields.content.split(/\s+/).filter(Boolean).length, [fields.content]);
@@ -235,10 +259,29 @@ export default function PostEditor({ initial, onSave, saving }) {
             <ToolButton onClick={() => wrap('```\n', '\n```', 'code')} label="Code block" />
             <ToolButton onClick={() => wrap('[', '](https://)', 'link text')} label="Link" />
             <ToolButton onClick={() => wrap('> ', '', 'Quote')} label="Quote" />
+            <ToolButton onClick={() => setVideoOpen((v) => !v)} label="Video link" title="Embed a YouTube or Vimeo video" />
             <ToolButton onClick={() => fileInput.current?.click()} label="+ Media" primary />
           </div>
         )}
       </div>
+      {videoOpen && !preview && (
+        <form onSubmit={submitVideo} className="space-y-2 border border-white/10 p-3">
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="url"
+              autoFocus
+              value={videoUrl}
+              onChange={(e) => (setVideoUrl(e.target.value), setVideoErr(''))}
+              placeholder="Paste a YouTube or Vimeo link"
+              aria-label="Video link"
+              className="input min-w-0 flex-1"
+            />
+            <button type="submit" className="btn-primary">Embed</button>
+            <button type="button" className="btn-ghost" onClick={() => (setVideoOpen(false), setVideoErr(''))}>Cancel</button>
+          </div>
+          {videoErr && <p role="alert" className="text-[12px] text-red-300">{videoErr}</p>}
+        </form>
+      )}
       <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => (uploadFiles(e.target.files), (e.target.value = ''))} />
 
       {/* Body */}

@@ -66,13 +66,40 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
 
 const frame = (src, title) => `<div class="embed-shell"><iframe src="${esc(src)}" title="${title}" loading="lazy" allowfullscreen></iframe></div>`;
 
+// YouTube / Vimeo links in any of their usual shapes -> a privacy-friendly embed URL (or null)
+export function parseVideoUrl(raw = '') {
+  let u;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(u.protocol)) return null;
+  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, '');
+  const ID = /^[\w-]{6,20}$/;
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const m = u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]+)/);
+    id = m ? m[1] : u.pathname === '/watch' ? u.searchParams.get('v') : null;
+  }
+  if (id && ID.test(id)) {
+    const t = (u.searchParams.get('t') || u.searchParams.get('start') || '').match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+    const start = t ? (+t[1] || 0) * 3600 + (+t[2] || 0) * 60 + (+t[3] || 0) : 0;
+    return { provider: 'YouTube', title: 'YouTube video', embedUrl: `https://www.youtube-nocookie.com/embed/${id}${start ? `?start=${start}` : ''}` };
+  }
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    const m = u.pathname.match(/(?:^\/|\/video\/)(\d{5,12})/);
+    if (m) return { provider: 'Vimeo', title: 'Vimeo video', embedUrl: `https://player.vimeo.com/video/${m[1]}` };
+  }
+  return null;
+}
+
 function embed(kind, raw) {
   const src = raw.startsWith('/uploads/') ? UPLOADS + raw.slice('/uploads/'.length) : raw;
   if (kind === 'pdf') return src.startsWith(UPLOADS) ? frame(src, 'Embedded PDF') : `<a href="${esc(src)}">${esc(src)}</a>`;
-  const yt = src.match(/^https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/i);
-  if (yt) return frame(`https://www.youtube-nocookie.com/embed/${yt[1]}`, 'YouTube video');
-  const vimeo = src.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/i);
-  if (vimeo) return frame(`https://player.vimeo.com/video/${vimeo[1]}`, 'Vimeo video');
+  const hosted = parseVideoUrl(src);
+  if (hosted) return frame(hosted.embedUrl, hosted.title);
   if (src.startsWith(UPLOADS)) return `<div class="embed-shell"><video controls preload="metadata" playsinline src="${esc(src)}"></video></div>`;
   return `<a href="${esc(src)}">${esc(src)}</a>`; // anything else is just a link (the CSP would block a remote <video> anyway)
 }
@@ -96,8 +123,10 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'IFRAME') {
     const src = node.getAttribute('src') || '';
     if (FRAME_OK.some((re) => re.test(src)) || src.startsWith(UPLOADS)) {
-      node.setAttribute('referrerpolicy', 'no-referrer');
-      node.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+      // YouTube refuses to play (error 153) without a referrer, so send the origin only, never the full URL
+      node.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      node.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox');
+      node.setAttribute('allow', 'encrypted-media; picture-in-picture; fullscreen');
     } else {
       node.remove();
     }
@@ -107,7 +136,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 const clean = (html) =>
   DOMPurify.sanitize(html, {
     ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allowfullscreen', 'controls', 'preload', 'loading', 'decoding', 'referrerpolicy', 'sandbox', 'playsinline'],
+    ADD_ATTR: ['allowfullscreen', 'controls', 'preload', 'loading', 'decoding', 'referrerpolicy', 'sandbox', 'allow', 'playsinline'],
     FORBID_TAGS: ['style', 'form', 'input', 'textarea', 'select', 'button', 'object', 'embed', 'link', 'meta', 'base'],
     FORBID_ATTR: ['style'],
   });
