@@ -6,6 +6,8 @@ The blog behind the portfolio: thoughts, how I work, engineering notes and resea
 Write a post by voice, from rough notes, or from a blank page. An AI pass turns voice/notes into a
 draft; you edit it, add media, and publish.
 
+**Contents:** [Features](#whats-in-it) · [Tech stack](#tech-stack) · [Getting started](#run-it) · [Writing a post](#writing-a-post) · [Data and storage](#data-and-storage) · [Deployment](#deployment) · [API](#api-overview) · [Architecture](#how-its-built) · [Performance](#performance) · [Security](#security) · [Configuration notes](#configuration-notes) · [Troubleshooting](#troubleshooting)
+
 ## What's in it
 
 **Reading**
@@ -29,6 +31,13 @@ draft; you edit it, add media, and publish.
 - **Hosting:** Docker on Fly.io
 
 ## Run it
+
+**Prerequisites:** Node.js 20+ and npm (the Docker image uses `node:20-alpine`). An OpenAI key is only
+needed for voice/text drafting.
+
+In development the app is served under `/blog/` (the Vite `base`), so open `http://localhost:5173/blog/`
+and the admin at `http://localhost:5173/blog/admin`. If `ADMIN_PASSWORD` is unset in dev, login is disabled,
+and an unset `JWT_SECRET` gets a random per-run value (sessions reset on restart).
 
 ```bash
 npm run install:all
@@ -58,6 +67,51 @@ Production: `npm run build && npm start` (see the `Dockerfile` and `fly.toml`).
 | `npm run dev` | API (`:3001`) and Vite client (`:5173`) together |
 | `npm run build` | Production client build |
 | `npm start` | Serves the API and the built client |
+
+## Writing a post
+
+1. Sign in at `/blog/admin` with `ADMIN_PASSWORD`.
+2. Start a post: **voice** (record, then the AI turns it into a draft), **text** (paste rough notes), or **blank** (write it yourself; works without an OpenAI key).
+3. Edit in the markdown editor with live preview. `Ctrl/Cmd+S` saves. Set a title, summary, category, tags and cover image.
+4. Add media by upload, drag-and-drop or paste; paste a YouTube/Vimeo link to embed it.
+5. Publish. Drafts are never visible publicly; unpublished changes can be edited any time.
+
+Categories are `thoughts`, `how-i-work`, `engineering` and `research` (defined in `server/config.js`).
+
+**Limits:** title 140 chars, summary 300, up to 8 tags (30 chars each), post body 200,000 chars, comment name 50 / text 2,000; uploads up to 12 MB images, 25 MB video, 15 MB PDF.
+
+## Data and storage
+
+There is no database. Everything lives under `DATA_DIR` (defaults to the `server/` folder in dev, `/data` on Fly):
+
+```
+DATA_DIR/
+  posts/        one <slug>.md per post (YAML frontmatter + markdown body)
+  uploads/      media with random filenames (images re-encoded to WebP)
+  comments/     <postId>.json
+  reactions/    <postId>.json
+  analytics/    views.json
+```
+
+Back up by copying the directory (or snapshotting the Fly volume). A post looks like:
+
+```markdown
+---
+id: 3f6c0a52-...            # UUID, generated
+title: My post
+summary: One-line description used in previews
+tags: [notes]
+category: thoughts
+cover: ''
+published: true
+createdAt: 2026-01-01T10:00:00.000Z
+updatedAt: 2026-01-01T10:00:00.000Z
+slug: my-post
+---
+Markdown body here.
+```
+
+Hand edits are picked up within 30 seconds (the in-memory cache TTL).
 
 ## Deployment
 
@@ -95,6 +149,18 @@ client/src/
 ```
 
 Posts are markdown files with YAML frontmatter under `DATA_DIR/posts`: easy to back up and edit by hand.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| Server exits with `FATAL: JWT_SECRET must be set` | Production mode needs `JWT_SECRET` (32+ chars) and `ADMIN_PASSWORD` (8+ chars) |
+| Cannot log in locally | `ADMIN_PASSWORD` is unset, which disables login in dev; set it in `server/.env` |
+| Voice/text drafting fails | `OPENAI_API_KEY` missing or invalid; use a blank draft instead |
+| Rate limits hit too early, or everyone shares one IP | `TRUST_PROXY` doesn't match the number of proxies in front |
+| Large upload fails through the portfolio | The portfolio's proxy body-size limit is too low (see configuration notes) |
+| Blank page at `/` in dev | The app lives under `/blog/`, not the root |
+| Posts or uploads vanish after a deploy | `DATA_DIR` isn't on a mounted volume |
 
 ## Performance
 
