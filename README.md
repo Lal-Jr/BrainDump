@@ -6,7 +6,9 @@ The blog behind the portfolio: thoughts, how I work, engineering notes and resea
 Write a post by voice, from rough notes, or from a blank page. An AI pass turns voice/notes into a
 draft; you edit it, add media, and publish.
 
-**Contents:** [Features](#whats-in-it) · [Tech stack](#tech-stack) · [Getting started](#run-it) · [Writing a post](#writing-a-post) · [Data and storage](#data-and-storage) · [Deployment](#deployment) · [API](#api-overview) · [Architecture](#how-its-built) · [Performance](#performance) · [Security](#security) · [Configuration notes](#configuration-notes) · [Troubleshooting](#troubleshooting)
+![Brain Dump demo: browsing the feed, reading a post, reacting and filtering by category](docs/demo.gif)
+
+**Contents:** [Features](#whats-in-it) · [Screenshots](#screenshots) · [Tech stack](#tech-stack) · [Getting started](#run-it) · [Writing a post](#writing-a-post) · [Data and storage](#data-and-storage) · [Deployment](#deployment) · [API](#api-overview) · [Architecture](#how-its-built) · [Performance](#performance) · [Security](#security) · [Configuration notes](#configuration-notes) · [Troubleshooting](#troubleshooting)
 
 ## What's in it
 
@@ -21,6 +23,16 @@ draft; you edit it, add media, and publish.
 - Media: upload, drag-and-drop or paste photos, video and PDFs; cover images; YouTube/Vimeo embeds
 - Dashboard with views, comment counts, publishing and comment moderation
 - Installable as an app (voice notes from a phone)
+
+## Screenshots
+
+| Feed | Post page |
+| --- | --- |
+| ![Feed with categories, tag filters and search](docs/feed.jpg) | ![Post page with outline, code copy button and reactions](docs/post.jpg) |
+
+![Feed filtered to the Engineering category](docs/filter.jpg)
+
+*Captured locally with sample posts.*
 
 ## Tech stack
 
