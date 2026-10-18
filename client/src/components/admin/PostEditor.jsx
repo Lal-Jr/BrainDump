@@ -12,6 +12,7 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,a
 const LIMIT_MB = { image: 12, video: 25, pdf: 15 };
 const kindOf = (file) => (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'pdf');
 const TOO_BIG_HINT = ' For video, a YouTube or Vimeo link works too: {{video:https://…}}.';
+const AUTOSAVE_MS = 2000; // pause in typing before an auto save
 let uploadId = 0;
 
 // The markdown to insert for an uploaded file. Videos and PDFs use the {{video:…}} / {{pdf:…}} embeds.
@@ -23,8 +24,9 @@ function markdownFor(media, file) {
 }
 
 // Title, summary, category, tags, cover image and a markdown body with preview. Media can be added
-// by button, drag-and-drop or paste; the parent owns saving.
-export default function PostEditor({ initial, onSave, saving }) {
+// by button, drag-and-drop or paste; the parent owns saving. With autoSave, edits save themselves
+// once typing pauses.
+export default function PostEditor({ initial, onSave, saving, autoSave = false }) {
   const toast = useToast();
   const [fields, setFields] = useState(() => ({
     title: initial.title ?? '',
@@ -45,9 +47,12 @@ export default function PostEditor({ initial, onSave, saving }) {
   const coverInput = useRef(null);
   const imageInput = useRef(null);
   const saved = useRef(JSON.stringify(fields)); // what's on the server, to detect unsaved edits
+  const failed = useRef(null); // the edit an auto save last failed on, so it isn't retried in a loop
+  const [savedAt, setSavedAt] = useState(null);
 
   const set = (key) => (e) => setFields((f) => ({ ...f, [key]: e.target.value }));
-  const dirty = JSON.stringify(fields) !== saved.current;
+  const snapshot = JSON.stringify(fields);
+  const dirty = snapshot !== saved.current;
   const uploading = Object.keys(uploads).length > 0;
 
   // Warn before closing the tab with unsaved work
@@ -70,11 +75,29 @@ export default function PostEditor({ initial, onSave, saving }) {
     [fields]
   );
 
-  const save = useCallback(async () => {
-    if (uploading) return toast.info('Wait for uploads to finish');
-    if (!fields.title.trim()) return toast.error('Add a title first');
-    if (await onSave(payload())) saved.current = JSON.stringify(fields);
-  }, [fields, onSave, payload, toast, uploading]);
+  // silent: an auto save, so no toasts unless it fails
+  const save = useCallback(
+    async ({ silent = false } = {}) => {
+      if (uploading) return silent || toast.info('Wait for uploads to finish');
+      if (!fields.title.trim()) return silent || toast.error('Add a title first');
+      if (await onSave(payload(), { silent })) {
+        saved.current = snapshot;
+        failed.current = null;
+        setSavedAt(new Date());
+      } else if (silent) {
+        failed.current = snapshot;
+      }
+    },
+    [fields.title, onSave, payload, snapshot, toast, uploading]
+  );
+
+  // Auto save once typing pauses. Waits out uploads (their placeholders aren't real content) and
+  // any save in flight; an edit that failed isn't retried until it changes again.
+  useEffect(() => {
+    if (!autoSave || !dirty || uploading || saving || !fields.title.trim() || failed.current === snapshot) return undefined;
+    const timer = setTimeout(() => save({ silent: true }), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [autoSave, dirty, uploading, saving, fields.title, snapshot, save]);
 
   // Ctrl/Cmd + S saves
   useEffect(() => {
@@ -326,10 +349,12 @@ export default function PostEditor({ initial, onSave, saving }) {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[12px] text-zinc-600">
-          {words} words{dirty ? ' · unsaved changes' : ''}
+        <span className="text-[12px] text-zinc-600" aria-live="polite">
+          {words} words
+          {saving ? ' · saving…' : dirty ? ' · unsaved changes' : savedAt ? ` · saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+          {!autoSave && ' · auto save is off for live posts'}
         </span>
-        <button type="button" onClick={save} disabled={saving || uploading || !fields.title.trim()} className="btn-primary">
+        <button type="button" onClick={() => save()} disabled={saving || uploading || !fields.title.trim()} className="btn-primary">
           {saving ? 'Saving…' : 'Save changes'}
         </button>
       </div>

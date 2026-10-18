@@ -21,12 +21,12 @@ export default function Edit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Returns true on success, so the editor knows the changes are safe
-  async function handleSave(fields) {
+  // Returns true on success, so the editor knows the changes are safe. Auto saves are silent.
+  async function handleSave(fields, { silent = false } = {}) {
     setSaving(true);
     try {
       setPost(await updatePost(id, fields));
-      toast.success('Saved');
+      if (!silent) toast.success('Saved');
       return true;
     } catch (e) {
       toast.error(`Save failed: ${e.message}`);
@@ -71,8 +71,9 @@ export default function Edit() {
         </div>
       </div>
 
-      {/* key: switching posts remounts the editor with fresh initial values */}
-      <PostEditor key={post.id} initial={post} onSave={handleSave} saving={saving} />
+      {/* key: switching posts remounts the editor with fresh initial values.
+          Only drafts auto save: on a live post a half-typed edit would go public. */}
+      <PostEditor key={post.id} initial={post} onSave={handleSave} saving={saving} autoSave={!post.published} />
     </div>
   );
 }
